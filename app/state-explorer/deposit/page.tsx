@@ -13,7 +13,7 @@ import { useChannelFlowStore } from "@/stores/useChannelFlowStore";
 import { useApprove, useIntegratedDeposit, type DepositStep } from "./_hooks";
 import { useChannelInfo } from "@/hooks/useChannelInfo";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
-import { FIXED_TARGET_CONTRACT } from "@tokamak/config";
+import { FIXED_TARGET_CONTRACT, getTokenByAddress, SUPPORTED_TOKENS } from "@tokamak/config";
 import { formatUnits } from "viem";
 import { Copy, Info, CheckCircle2, Loader2, HelpCircle } from "lucide-react";
 import { formatWithCommas } from "@/lib/utils/format";
@@ -29,8 +29,15 @@ function DepositPage() {
     currentChannelId ? (currentChannelId as `0x${string}`) : null
   );
   const tokenAddress = channelInfo?.targetContract || FIXED_TARGET_CONTRACT;
-  const tokenDecimals = 18; // TODO: Get from token contract
-  const tokenSymbol = "TON"; // TODO: Get from token contract
+  
+  // Get token info from address
+  const tokenInfo = useMemo(() => {
+    if (!tokenAddress) return SUPPORTED_TOKENS.TON;
+    return getTokenByAddress(tokenAddress) || SUPPORTED_TOKENS.TON;
+  }, [tokenAddress]);
+  
+  const tokenDecimals = tokenInfo.decimals;
+  const tokenSymbol = tokenInfo.symbol;
 
   // Fetch user's token balance
   const { balance: userTokenBalance } = useTokenBalance({

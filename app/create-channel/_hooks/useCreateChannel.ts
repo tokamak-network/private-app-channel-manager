@@ -259,6 +259,11 @@ export function useCreateChannel({
         /^0x[a-fA-F0-9]{40}$/.test(p.address)
     );
 
+    console.log("📋 Participants validation:", {
+      original: participants.map((p, i) => ({ index: i, address: p.address, isValid: /^0x[a-fA-F0-9]{40}$/.test(p.address) })),
+      validCount: validParticipants.length,
+    });
+
     if (validParticipants.length < 2) {
       console.log("❌ Validation failed: not enough participants", validParticipants.length);
       setError("Please add at least 2 valid participant addresses");

@@ -89,6 +89,8 @@ export interface Channel {
   status?: 'pending' | 'active' | 'frozen' | 'closed';
   targetContract?: string;
   participants?: string[];
+  /** Selected tokens for this channel (e.g., ["TON"], ["TON", "USDC"]) */
+  selectedTokens?: string[];
   initializationTxHash?: string;
   initializedAt?: string;
   initialProof?: any;

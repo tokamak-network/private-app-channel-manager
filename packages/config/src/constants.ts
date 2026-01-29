@@ -66,6 +66,33 @@ export const SUPPORTED_TOKENS = {
 
 export type TokenSymbol = keyof typeof SUPPORTED_TOKENS;
 
+export type TokenInfo = typeof SUPPORTED_TOKENS[TokenSymbol];
+
+/**
+ * Get token info by contract address
+ * @param address - Token contract address (case-insensitive)
+ * @returns Token info or undefined if not found
+ */
+export const getTokenByAddress = (address: string): TokenInfo | undefined => {
+  const normalizedAddress = address.toLowerCase();
+  return Object.values(SUPPORTED_TOKENS).find(
+    (token) => token.address.toLowerCase() === normalizedAddress
+  );
+};
+
+/**
+ * Get token symbol by contract address
+ * @param address - Token contract address (case-insensitive)
+ * @returns Token symbol or undefined if not found
+ */
+export const getTokenSymbolByAddress = (address: string): TokenSymbol | undefined => {
+  const normalizedAddress = address.toLowerCase();
+  const entry = Object.entries(SUPPORTED_TOKENS).find(
+    ([, token]) => token.address.toLowerCase() === normalizedAddress
+  );
+  return entry ? (entry[0] as TokenSymbol) : undefined;
+};
+
 /**
  * DKG Status
  */

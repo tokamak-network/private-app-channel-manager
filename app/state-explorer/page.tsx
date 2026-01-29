@@ -93,7 +93,7 @@ export default function StateExplorerPage() {
   // Get withdrawable amount for current user using the updated hook
   // After cleanupChannel, channel state becomes 0 but withdrawable amounts remain
   // Uses getValidatedUserSlotValue + getBalanceSlotIndex internally
-  const { withdrawableAmount, hasWithdrawableAmount: hookHasWithdrawable } = useWithdrawableAmount({
+  const { withdrawableAmount, hasWithdrawableAmount: hookHasWithdrawable, isLoading: isLoadingWithdrawable } = useWithdrawableAmount({
     channelId: currentChannelId,
   });
 
@@ -109,9 +109,17 @@ export default function StateExplorerPage() {
     if (channelStateData !== undefined) {
       // ChannelState enum: 0=None, 1=Initialized, 2=Open, 3=Closing, 4=Closed
       const state = Number(channelStateData) as ContractChannelState;
+      console.log("[StateExplorerPage] Channel state updated:", {
+        channelId: currentChannelId,
+        rawData: channelStateData,
+        parsedState: state,
+        isLoadingState,
+        isLoadingWithdrawable,
+        hasWithdrawableAmount,
+      });
       setContractChannelState(state);
     }
-  }, [channelStateData]);
+  }, [channelStateData, currentChannelId, isLoadingState, isLoadingWithdrawable, hasWithdrawableAmount]);
 
   // Listen for submit proof success events to refetch channel state
   useEffect(() => {
@@ -188,17 +196,27 @@ export default function StateExplorerPage() {
 
   if (!currentChannelId) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Loading...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-gray-300 border-t-purple-600 rounded-full animate-spin" />
+          <p className="text-gray-500 font-mono">Loading...</p>
+        </div>
       </div>
     );
   }
 
-  // Show loading state while fetching channel state
-  if (isLoadingState || contractChannelState === null) {
+  // Show loading state while fetching channel state or withdrawable amount
+  // For state 0, we need to wait for withdrawable amount check to complete
+  const isLoading = isLoadingState || contractChannelState === null || 
+    (contractChannelState === 0 && isLoadingWithdrawable);
+  
+  if (isLoading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Loading channel state...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-gray-300 border-t-purple-600 rounded-full animate-spin" />
+          <p className="text-gray-500 font-mono">Loading channel state...</p>
+        </div>
       </div>
     );
   }
