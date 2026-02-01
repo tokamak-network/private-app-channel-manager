@@ -64,7 +64,7 @@ export function useChannelInfo() {
     ? participants?.some((p) => p.toLowerCase() === address.toLowerCase()) ?? false
     : false;
 
-  const isLoading = isLoadingState || isLoadingLeader || isLoadingParticipants || isLoadingWhitelist;
+  const isLoading = isLoadingState || isLoadingLeader || isLoadingParticipants || (address && isLoadingWhitelist);
 
   const channelInfo: ChannelInfo | null = isValidChannelId
     ? {

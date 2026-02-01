@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, Search, Copy, Check } from 'lucide-react';
 import { useChannelInfo } from '../hooks/useChannelInfo';
 import { useSettings } from '../hooks/useSettings';
+
+const WALLET_STORAGE_KEY = 'tokamak_connected_wallet';
 
 const stateColors: Record<string, string> = {
   None: 'text-text-tertiary',
@@ -14,7 +15,19 @@ const stateColors: Record<string, string> = {
 };
 
 export default function Home() {
-  const { isConnected } = useAccount();
+  const [savedAddress, setSavedAddress] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(WALLET_STORAGE_KEY, (result) => {
+        setSavedAddress(result[WALLET_STORAGE_KEY] || null);
+      });
+    } else {
+      setSavedAddress(localStorage.getItem(WALLET_STORAGE_KEY));
+    }
+  }, []);
+
+  const isConnected = !!savedAddress;
   const navigate = useNavigate();
   const { settings, saveSettings } = useSettings();
   const { channelInfo, isLoading, hasValidChannelId } = useChannelInfo();

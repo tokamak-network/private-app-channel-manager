@@ -6,7 +6,12 @@ const DEFAULT_RPC_URL = 'https://eth-sepolia.g.alchemy.com/v2/PbqCcGx1oHN7yNaFdU
 
 export const wagmiConfig = createConfig({
   chains: [sepolia],
-  connectors: [injected()],
+  connectors: [
+    injected({
+      shimDisconnect: true,
+      target: 'metaMask',
+    }),
+  ],
   transports: {
     [sepolia.id]: http(DEFAULT_RPC_URL),
   },
