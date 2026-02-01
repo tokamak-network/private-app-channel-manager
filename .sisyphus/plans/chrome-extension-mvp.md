@@ -396,7 +396,7 @@ Wave 5 (Final):
 
 ### Task 3: Settings Page
 
-- [ ] 3. Implement Settings Page with RPC and Server URL
+- [x] 3. Implement Settings Page with RPC and Server URL
 
   **What to do**:
   - Create Settings tab page
