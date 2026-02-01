@@ -3,8 +3,18 @@
   "name": "Tokamak Channels",
   "version": "0.1.0",
   "description": "Tokamak Private App Channels Participant - Secure Layer 2 state channel transactions",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "action": {
-    "default_popup": "src/popup/index.html"
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "permissions": ["storage"]
 }
