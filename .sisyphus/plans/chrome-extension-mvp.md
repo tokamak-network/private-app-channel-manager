@@ -685,7 +685,7 @@ Wave 5 (Final):
 
 ### Task 7: L2 Transaction Request
 
-- [ ] 7. Implement L2 Transaction Request to Leader Server
+- [x] 7. Implement L2 Transaction Request to Leader Server
 
   **What to do**:
   - Recipient address input
