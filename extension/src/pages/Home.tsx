@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { useNavigate } from 'react-router-dom';
 import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, Search, Copy, Check } from 'lucide-react';
 import { useChannelInfo } from '../hooks/useChannelInfo';
 import { useSettings } from '../hooks/useSettings';
@@ -14,6 +15,7 @@ const stateColors: Record<string, string> = {
 
 export default function Home() {
   const { isConnected } = useAccount();
+  const navigate = useNavigate();
   const { settings, saveSettings } = useSettings();
   const { channelInfo, isLoading, hasValidChannelId } = useChannelInfo();
 
@@ -100,6 +102,7 @@ export default function Home() {
             </button>
             <button
               disabled={channelInfo.state !== 'Initialized'}
+              onClick={() => navigate('/deposit')}
               className="flex-1 flex items-center justify-center gap-2 bg-surface hover:bg-surface-hover text-text-primary py-3 rounded-card font-medium transition-colors border border-border disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowDownLeft className="w-4 h-4" />

@@ -605,7 +605,7 @@ Wave 5 (Final):
 
 ### Task 6: Deposit Flow
 
-- [ ] 6. Implement Token Deposit with MPT Key Generation
+- [x] 6. Implement Token Deposit with MPT Key Generation
 
   **What to do**:
   - Token selector (from SUPPORTED_TOKENS)
