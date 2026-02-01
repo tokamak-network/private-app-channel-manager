@@ -321,7 +321,7 @@ Wave 5 (Final):
 
 ### Task 2: Wallet Connection (MetaMask)
 
-- [ ] 2. Implement MetaMask Connection in Extension
+- [x] 2. Implement MetaMask Connection in Extension
 
   **What to do**:
   - Install wagmi, viem, @tanstack/react-query
