@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Tokamak Channels",
+  "version": "0.1.0",
+  "description": "Tokamak Private App Channels Participant - Secure Layer 2 state channel transactions",
+  "action": {
+    "default_popup": "src/popup/index.html"
+  },
+  "permissions": ["storage"]
+}
