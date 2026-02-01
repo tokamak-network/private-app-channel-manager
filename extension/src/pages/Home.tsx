@@ -93,21 +93,34 @@ export default function Home() {
           </div>
 
           <div className="flex gap-3">
-            <button
-              disabled={channelInfo.state !== 'Open'}
-              className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-3 rounded-card font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ArrowUpRight className="w-4 h-4" />
-              Send
-            </button>
-            <button
-              disabled={channelInfo.state !== 'Initialized'}
-              onClick={() => navigate('/deposit')}
-              className="flex-1 flex items-center justify-center gap-2 bg-surface hover:bg-surface-hover text-text-primary py-3 rounded-card font-medium transition-colors border border-border disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ArrowDownLeft className="w-4 h-4" />
-              Deposit
-            </button>
+            {channelInfo.state === 'Closed' ? (
+              <button
+                onClick={() => navigate('/withdraw')}
+                className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-3 rounded-card font-medium transition-colors"
+              >
+                <ArrowDownLeft className="w-4 h-4" />
+                Withdraw
+              </button>
+            ) : (
+              <>
+                <button
+                  disabled={channelInfo.state !== 'Open'}
+                  onClick={() => navigate('/send')}
+                  className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-3 rounded-card font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  Send
+                </button>
+                <button
+                  disabled={channelInfo.state !== 'Initialized'}
+                  onClick={() => navigate('/deposit')}
+                  className="flex-1 flex items-center justify-center gap-2 bg-surface hover:bg-surface-hover text-text-primary py-3 rounded-card font-medium transition-colors border border-border disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ArrowDownLeft className="w-4 h-4" />
+                  Deposit
+                </button>
+              </>
+            )}
           </div>
 
           <div className="bg-surface rounded-card p-4">

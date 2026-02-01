@@ -70,6 +70,31 @@ export const BRIDGECORE_ABI = [
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
     stateMutability: "view",
   },
+  {
+    type: "function",
+    name: "hasUserWithdrawn",
+    inputs: [
+      { name: "channelId", type: "bytes32", internalType: "bytes32" },
+      { name: "participant", type: "address", internalType: "address" },
+      { name: "targetContract", type: "address", internalType: "address" },
+    ],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getChannelTargetContract",
+    inputs: [{ name: "channelId", type: "bytes32", internalType: "bytes32" }],
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getBalanceSlotIndex",
+    inputs: [{ name: "targetContract", type: "address", internalType: "address" }],
+    outputs: [{ name: "", type: "uint8", internalType: "uint8" }],
+    stateMutability: "view",
+  },
 ] as const;
 
 export const BRIDGEDEPOSITMANAGER_ABI = [
@@ -109,6 +134,19 @@ export const BRIDGEDEPOSITMANAGER_ABI = [
       },
     ],
     anonymous: false,
+  },
+] as const;
+
+export const BRIDGEWITHDRAWMANAGER_ABI = [
+  {
+    type: "function",
+    name: "withdraw",
+    inputs: [
+      { name: "_channelId", type: "bytes32", internalType: "bytes32" },
+      { name: "_targetContract", type: "address", internalType: "address" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
 ] as const;
 
