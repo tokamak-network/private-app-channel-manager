@@ -462,7 +462,7 @@ Wave 5 (Final):
 
 ### Task 4: Channel Dashboard
 
-- [ ] 4. Implement Channel Info Display
+- [x] 4. Implement Channel Info Display
 
   **What to do**:
   - Channel ID input (bytes32)
@@ -544,7 +544,7 @@ Wave 5 (Final):
 
 ### Task 5: Join Channel Flow
 
-- [ ] 5. Implement Channel Join (Whitelist Check)
+- [x] 5. Implement Channel Join (Whitelist Check)
 
   **What to do**:
   - Check if user is whitelisted (state < 2) or participant (state >= 2)
