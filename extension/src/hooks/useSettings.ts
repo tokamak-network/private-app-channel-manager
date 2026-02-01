@@ -7,8 +7,8 @@ export interface ExtensionSettings {
 }
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
-  rpcUrl: 'https://rpc.sepolia.org',
-  leaderServerUrl: '',
+  rpcUrl: 'https://eth-sepolia.g.alchemy.com/v2/PbqCcGx1oHN7yNaFdUJUYqPEN0QSp23S',
+  leaderServerUrl: 'http://localhost:3000',
   channelId: '',
 };
 

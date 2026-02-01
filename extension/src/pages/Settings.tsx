@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useDisconnect } from 'wagmi';
 import {
   Server,
@@ -15,14 +15,22 @@ import { useSettings } from '../hooks/useSettings';
 export default function Settings() {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-  const { settings, saveSettings, testRpcConnection, testServerConnection } =
+  const { settings, isLoading: isLoadingSettings, saveSettings, testRpcConnection, testServerConnection } =
     useSettings();
 
-  const [rpcUrl, setRpcUrl] = useState(settings.rpcUrl);
-  const [serverUrl, setServerUrl] = useState(settings.leaderServerUrl);
+  const [rpcUrl, setRpcUrl] = useState('');
+  const [serverUrl, setServerUrl] = useState('');
+  
+  useEffect(() => {
+    if (!isLoadingSettings) {
+      setRpcUrl(settings.rpcUrl);
+      setServerUrl(settings.leaderServerUrl);
+    }
+  }, [settings, isLoadingSettings]);
   const [rpcStatus, setRpcStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [serverStatus, setServerStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handleTestRpc = async () => {
     setRpcStatus('testing');
@@ -42,11 +50,14 @@ export default function Settings() {
 
   const handleSave = async () => {
     setIsSaving(true);
+    setSaveSuccess(false);
     await saveSettings({
       rpcUrl,
       leaderServerUrl: serverUrl,
     });
     setIsSaving(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   };
 
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -135,12 +146,19 @@ export default function Settings() {
       <button
         onClick={handleSave}
         disabled={isSaving}
-        className="w-full py-3 bg-primary rounded-button text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        className={`w-full py-3 rounded-button text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+          saveSuccess ? 'bg-success' : 'bg-primary hover:bg-primary-hover'
+        }`}
       >
         {isSaving ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
             Saving...
+          </>
+        ) : saveSuccess ? (
+          <>
+            <Check className="w-4 h-4" />
+            Saved!
           </>
         ) : (
           'Save Settings'
