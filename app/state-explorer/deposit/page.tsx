@@ -10,13 +10,13 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useChannelFlowStore } from "@/stores/useChannelFlowStore";
-import { useApprove, useIntegratedDeposit, type DepositStep } from "./_hooks";
+import { useApprove, useIntegratedDeposit } from "./_hooks";
 import { useChannelInfo } from "@/hooks/useChannelInfo";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { FIXED_TARGET_CONTRACT } from "@tokamak/config";
 import { useToken } from "../_context";
 import { formatUnits } from "viem";
-import { Copy, Info, CheckCircle2, Loader2, HelpCircle } from "lucide-react";
+import { Copy, Info, Loader2, HelpCircle } from "lucide-react";
 import { formatWithCommas } from "@/lib/utils/format";
 import { Button, AmountInput } from "@/components/ui";
 import { DepositConfirmModal } from "./_components/DepositConfirmModal";
@@ -139,26 +139,6 @@ function DepositPage() {
     }
   };
 
-  // Get step description for progress display
-  const getStepDescription = (step: DepositStep): string => {
-    switch (step) {
-      case "signing_mpt":
-        return "Signing to generate your L2 MPT Key...";
-      case "mpt_generated":
-        return "MPT Key generated!";
-      case "signing_deposit":
-        return "Signing deposit transaction...";
-      case "confirming":
-        return "Confirming transaction on blockchain...";
-      case "completed":
-        return "Deposit completed!";
-      case "error":
-        return "An error occurred";
-      default:
-        return "";
-    }
-  };
-
   if (isTokenLoading) {
     return (
       <div className="font-mono flex items-center justify-center" style={{ width: 544, minHeight: 200 }}>
@@ -238,33 +218,6 @@ function DepositPage() {
           error={isInsufficientBalance}
           testId="deposit-amount-input"
         />
-
-        {/* Progress Steps (shown when processing) */}
-        {isProcessing && currentStep !== "idle" && (
-          <div className="flex items-center gap-3 p-4 bg-[#F8F9FA] border border-[#E5E5E5] rounded-lg">
-            <Loader2 className="w-5 h-5 text-[#2A72E5] animate-spin flex-shrink-0" />
-            <span className="text-sm text-[#666666]">
-              {getStepDescription(currentStep)}
-            </span>
-          </div>
-        )}
-
-        {/* Success State */}
-        {currentStep === "completed" && (
-          <div className="flex items-center gap-3 p-4 bg-[#D4EDDA] border border-[#C3E6CB] rounded-lg">
-            <CheckCircle2 className="w-5 h-5 text-[#155724] flex-shrink-0" />
-            <span className="text-sm text-[#155724]">
-              Deposit completed successfully!
-            </span>
-          </div>
-        )}
-
-        {/* Error State */}
-        {depositError && (
-          <div className="p-4 bg-[#F8D7DA] border border-[#F5C6CB] rounded-lg">
-            <p className="text-sm text-[#721C24]">{depositError}</p>
-          </div>
-        )}
 
         {/* Current Allowance Display */}
         <div className="flex justify-between items-center text-sm">
