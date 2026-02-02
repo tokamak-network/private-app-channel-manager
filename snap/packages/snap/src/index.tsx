@@ -86,13 +86,17 @@ const NAV = {
   BACK: 'nav_back',
 } as const;
 
-// Form names
 const FORMS = {
   SET_CHANNEL_ID: 'form_setChannelId',
   SET_SERVER_URL: 'form_setServerUrl',
   DEPOSIT: 'form_deposit',
   SEND: 'form_send',
   WITHDRAW: 'form_withdraw',
+} as const;
+
+const ACTIONS = {
+  SAVE_CHANNEL_ID: 'action_saveChannelId',
+  SAVE_SERVER_URL: 'action_saveServerUrl',
 } as const;
 
 // ============================================================================
@@ -650,16 +654,12 @@ function SetChannelIdView(settings: Settings) {
         </Box>
       ) : null}
       <Form name={FORMS.SET_CHANNEL_ID}>
-        <Field label="Channel ID">
-          <Input
-            name="channelId"
-            placeholder="0x..."
-            value={settings.channelId}
-          />
+        <Field label="New Channel ID">
+          <Input name="channelId" placeholder="0x..." />
         </Field>
         <Box direction="horizontal">
           <Button name={NAV.BACK}>Back</Button>
-          <Button type="submit">Save</Button>
+          <Button name={ACTIONS.SAVE_CHANNEL_ID}>Save</Button>
         </Box>
       </Form>
     </Box>
@@ -683,16 +683,12 @@ function SetServerUrlView(settings: Settings) {
         </Box>
       ) : null}
       <Form name={FORMS.SET_SERVER_URL}>
-        <Field label="Server URL">
-          <Input
-            name="serverUrl"
-            placeholder="http://localhost:3000"
-            value={settings.leaderServerUrl}
-          />
+        <Field label="New Server URL">
+          <Input name="serverUrl" placeholder="http://localhost:3000" />
         </Field>
         <Box direction="horizontal">
           <Button name={NAV.BACK}>Back</Button>
-          <Button type="submit">Save</Button>
+          <Button name={ACTIONS.SAVE_SERVER_URL}>Save</Button>
         </Box>
       </Form>
     </Box>
@@ -1040,6 +1036,97 @@ export const onUserInput: OnUserInputHandler = async ({ id, event }) => {
         break;
       default:
         break;
+    }
+
+    if (buttonName === ACTIONS.SAVE_CHANNEL_ID) {
+      try {
+        const state = (await snap.request({
+          method: 'snap_getInterfaceState',
+          params: { id },
+        })) as Record<string, Record<string, string>>;
+
+        const formState = state[FORMS.SET_CHANNEL_ID] || {};
+        const channelId = formState.channelId?.trim() ?? '';
+        console.log('Interface state:', JSON.stringify(state));
+        console.log('Channel ID from state:', channelId);
+
+        if (!channelId) {
+          const ui = ErrorView('Please enter a Channel ID');
+          await snap.request({
+            method: 'snap_updateInterface',
+            params: { id, ui },
+          });
+          return;
+        }
+
+        if (!channelId.startsWith('0x') || channelId.length !== 66) {
+          const ui = ErrorView(
+            `Invalid Channel ID format. Must be 66 characters starting with 0x. Got ${channelId.length} chars.`,
+          );
+          await snap.request({
+            method: 'snap_updateInterface',
+            params: { id, ui },
+          });
+          return;
+        }
+
+        await saveSettings({ ...settings, channelId });
+        const updatedSettings = await getSettings();
+        const ui = MenuView(updatedSettings);
+        await snap.request({
+          method: 'snap_updateInterface',
+          params: { id, ui },
+        });
+      } catch (e) {
+        const ui = ErrorView(
+          `Failed to save Channel ID: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        await snap.request({
+          method: 'snap_updateInterface',
+          params: { id, ui },
+        });
+      }
+      return;
+    }
+
+    if (buttonName === ACTIONS.SAVE_SERVER_URL) {
+      try {
+        const state = (await snap.request({
+          method: 'snap_getInterfaceState',
+          params: { id },
+        })) as Record<string, Record<string, string>>;
+
+        const formState = state[FORMS.SET_SERVER_URL] || {};
+        const serverUrl = formState.serverUrl?.trim() ?? '';
+        console.log('Interface state:', JSON.stringify(state));
+        console.log('Server URL from state:', serverUrl);
+
+        if (!serverUrl) {
+          const ui = ErrorView('Please enter a Server URL');
+          await snap.request({
+            method: 'snap_updateInterface',
+            params: { id, ui },
+          });
+          return;
+        }
+
+        await saveSettings({ ...settings, leaderServerUrl: serverUrl });
+        const updatedSettings = await getSettings();
+        const ui = MenuView(updatedSettings);
+        await snap.request({
+          method: 'snap_updateInterface',
+          params: { id, ui },
+        });
+      } catch (e) {
+        const ui = ErrorView(
+          `Failed to save Server URL: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        await snap.request({
+          method: 'snap_updateInterface',
+          params: { id, ui },
+        });
+      }
+      return;
     }
 
     if (buttonName === 'action_withdraw') {

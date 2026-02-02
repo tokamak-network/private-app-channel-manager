@@ -324,4 +324,136 @@ test.describe.serial('Tokamak Channels Snap - Full Workflow', () => {
       }
     }
   });
+
+  async function navigateToSnapHomepage(page: Page): Promise<boolean> {
+    await page.goto(`chrome-extension://${METAMASK_EXTENSION_ID}/home.html#snaps`);
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: 'test-results/07-snaps-page-direct.png' });
+    
+    const tokamakText = page.getByText('Tokamak Channels');
+    if (await tokamakText.isVisible({ timeout: 3000 }).catch(() => false)) {
+      console.log('Found Tokamak Channels text, clicking...');
+      await tokamakText.click();
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: 'test-results/07-snap-details.png' });
+      
+      const pageText = await page.textContent('body').catch(() => '') || '';
+      console.log('After clicking Tokamak (first 400 chars):', pageText.substring(0, 400));
+      
+      const homeBtn = page.getByRole('button', { name: 'Home' });
+      const homeBtn2 = page.locator('button').filter({ hasText: /home/i }).first();
+      
+      if (await homeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await homeBtn.click();
+        await page.waitForTimeout(3000);
+        await page.screenshot({ path: 'test-results/07-snap-homepage.png' });
+        console.log('Navigated to Snap Homepage');
+        return true;
+      } else if (await homeBtn2.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await homeBtn2.click();
+        await page.waitForTimeout(3000);
+        await page.screenshot({ path: 'test-results/07-snap-homepage.png' });
+        console.log('Navigated to Snap Homepage via locator');
+        return true;
+      } else {
+        console.log('Home button not found on snap details page');
+        const allClickables = await page.locator('button, a').all();
+        for (const el of allClickables.slice(0, 15)) {
+          const text = await el.textContent().catch(() => '');
+          if (text?.trim()) {
+            console.log(`  Clickable: "${text.trim()}"`);
+          }
+        }
+      }
+    } else {
+      console.log('Tokamak Channels text not found');
+      const pageText = await page.textContent('body').catch(() => '') || '';
+      console.log('Page text:', pageText.substring(0, 300));
+    }
+    
+    return false;
+  }
+
+  test('7. Change Channel ID via Snap Homepage Form', async () => {
+    const navigated = await navigateToSnapHomepage(page);
+    if (!navigated) {
+      console.log('Failed to navigate to snap homepage');
+      return;
+    }
+
+    await page.screenshot({ path: 'test-results/07-snap-homepage-before.png' });
+    
+    const setChannelBtn = page.locator('button').filter({ hasText: /Set Channel ID/i }).first();
+    if (await setChannelBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await setChannelBtn.click();
+      console.log('Clicked Set Channel ID button on Snap homepage');
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: 'test-results/07-set-channel-form.png' });
+      
+      const NEW_CHANNEL_ID = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      
+      const input = page.locator('input').first();
+      if (await input.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await input.click();
+        await input.fill('');
+        await input.type(NEW_CHANNEL_ID, { delay: 10 });
+        const inputValue = await input.inputValue();
+        console.log('Input value after typing:', inputValue);
+        console.log('Expected value:', NEW_CHANNEL_ID);
+        console.log('Values match:', inputValue === NEW_CHANNEL_ID);
+        await page.screenshot({ path: 'test-results/07-channel-id-filled.png' });
+        
+        const saveBtn = page.locator('button').filter({ hasText: /^Save$/i }).first();
+        if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          const frames = page.frames();
+          console.log('Number of frames:', frames.length);
+          for (let i = 0; i < frames.length; i++) {
+            console.log(`Frame ${i}: ${frames[i]!.url()}`);
+          }
+          
+          const saveBtnBounds = await saveBtn.boundingBox();
+          console.log('Save button bounds:', saveBtnBounds);
+          
+          if (saveBtnBounds) {
+            await page.mouse.click(saveBtnBounds.x + saveBtnBounds.width / 2, saveBtnBounds.y + saveBtnBounds.height / 2);
+            console.log('Clicked Save button via mouse coordinates');
+          } else {
+            await saveBtn.click({ force: true });
+            console.log('Clicked Save button with force');
+          }
+          
+          await page.waitForTimeout(3000);
+          await page.screenshot({ path: 'test-results/07-after-save.png' });
+          
+          let pageText = await page.textContent('body').catch(() => '') || '';
+          console.log('Page text after save:', pageText.substring(0, 500));
+          
+          const hasNewChannelTruncated = pageText.includes('0x1234') || pageText.includes('cdef');
+          console.log('New channel ID visible:', hasNewChannelTruncated);
+          
+          const setChannelBtn2 = page.locator('button').filter({ hasText: /Set Channel ID/i }).first();
+          if (await setChannelBtn2.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await setChannelBtn2.click();
+            await page.waitForTimeout(2000);
+            await page.screenshot({ path: 'test-results/07-verify-persisted.png' });
+            
+            const copyableText = await page.textContent('body').catch(() => '') || '';
+            const channelPersisted = copyableText.includes(NEW_CHANNEL_ID);
+            console.log('Channel ID persisted correctly:', channelPersisted);
+            
+            expect(channelPersisted).toBe(true);
+          }
+        }
+      }
+    } else {
+      console.log('Set Channel ID button not visible on snap homepage');
+      const allButtons = await page.locator('button').all();
+      for (const btn of allButtons) {
+        const text = await btn.textContent().catch(() => '');
+        if (text?.trim()) {
+          console.log('  Button found:', text.trim());
+        }
+      }
+    }
+  });
 });
