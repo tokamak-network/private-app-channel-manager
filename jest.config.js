@@ -5,7 +5,6 @@ const createJestConfig = nextJest({
   dir: './',
 })
 
-// Add any custom config to be passed to Jest
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jest-environment-jsdom',
@@ -20,6 +19,9 @@ const customJestConfig = {
     '/node_modules/',
     '/.next/',
     '/Tokamak-Zk-EVM/',
+  ],
+  transformIgnorePatterns: [
+    '/node_modules/(?!(wagmi|viem|@wagmi|@tanstack)/)',
   ],
   collectCoverageFrom: [
     'components/**/*.{js,jsx,ts,tsx}',
