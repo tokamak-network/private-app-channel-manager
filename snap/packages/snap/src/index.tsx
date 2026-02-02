@@ -2,8 +2,6 @@ import type {
   OnRpcRequestHandler,
   OnHomePageHandler,
   OnUserInputHandler,
-  UserInputEvent,
-  Json,
 } from '@metamask/snaps-sdk';
 import { UserInputEventType } from '@metamask/snaps-sdk';
 import {
@@ -20,6 +18,12 @@ import {
   Field,
   Input,
 } from '@metamask/snaps-sdk/jsx';
+import {
+  L2_PRV_KEY_MESSAGE,
+  deriveL2KeysFromSignature,
+  deriveL2AddressFromKeys,
+  deriveL2MptKeyFromAddress,
+} from 'tokamak-l2js';
 
 // ============================================================================
 // Types
@@ -123,7 +127,7 @@ async function saveSettings(settings: Settings): Promise<void> {
     method: 'snap_manageState',
     params: {
       operation: 'update',
-      newState: settings as unknown as Record<string, Json>,
+      newState: settings as Record<string, string>,
     },
   });
 }
@@ -354,12 +358,32 @@ function parseUnits(value: string, decimals: number = 18): string {
 }
 
 // ============================================================================
+// MPT Key Generation
+// ============================================================================
+
+async function generateMptKey(
+  channelId: string,
+  slotIndex: number = 0,
+): Promise<`0x${string}`> {
+  const userAddress = await getUserAddress();
+  const message = L2_PRV_KEY_MESSAGE + channelId;
+
+  const signature = (await ethereum.request({
+    method: 'personal_sign',
+    params: [message, userAddress],
+  })) as `0x${string}`;
+
+  const keys = deriveL2KeysFromSignature(signature);
+  const l2Address = deriveL2AddressFromKeys(keys);
+  const mptKey = deriveL2MptKeyFromAddress(l2Address, slotIndex);
+
+  return mptKey;
+}
+
+// ============================================================================
 // L1 Transaction Functions
 // ============================================================================
 
-/**
- *
- */
 async function getUserAddress(): Promise<string> {
   const accounts = (await ethereum.request({
     method: 'eth_accounts',
@@ -736,15 +760,13 @@ function DepositView(settings: Settings) {
       <Heading>Deposit Tokens</Heading>
       <Divider />
       <Text>Deposit tokens to your channel (L1 transaction)</Text>
+      <Text>MPT Key will be generated automatically from your signature.</Text>
       <Row label="Channel">
         <Text>{formatAddress(settings.channelId)}</Text>
       </Row>
       <Form name={FORMS.DEPOSIT}>
         <Field label="Amount (tokens)">
           <Input name="amount" placeholder="0.0" />
-        </Field>
-        <Field label="MPT Key (bytes32)">
-          <Input name="mptKey" placeholder="0x..." />
         </Field>
         <Box direction="horizontal">
           <Button name={NAV.BACK}>Back</Button>
@@ -1059,55 +1081,65 @@ export const onUserInput: OnUserInputHandler = async ({ id, event }) => {
 
     switch (formName) {
       case FORMS.SET_CHANNEL_ID: {
-        const channelId = formData.channelId?.trim() || '';
-        if (
-          channelId &&
-          channelId.startsWith('0x') &&
-          channelId.length === 66
-        ) {
-          await saveSettings({ ...settings, channelId });
-          const ui = SuccessView(
-            'Success',
-            `Channel ID saved: ${formatAddress(channelId)}`,
-          );
+        const channelId = formData.channelId?.trim() ?? '';
+        console.log('Form data received:', JSON.stringify(formData));
+        console.log('Channel ID from form:', channelId);
+
+        if (!channelId) {
+          const ui = ErrorView('Please enter a Channel ID');
           await snap.request({
             method: 'snap_updateInterface',
             params: { id, ui },
           });
-        } else {
-          const ui = ErrorView(
-            'Invalid Channel ID. Must be 66 characters starting with 0x',
-          );
-          await snap.request({
-            method: 'snap_updateInterface',
-            params: { id, ui },
-          });
+          return;
         }
+
+        if (!channelId.startsWith('0x') || channelId.length !== 66) {
+          const ui = ErrorView(
+            `Invalid Channel ID format. Must be 66 characters starting with 0x. Got ${channelId.length} chars.`,
+          );
+          await snap.request({
+            method: 'snap_updateInterface',
+            params: { id, ui },
+          });
+          return;
+        }
+
+        await saveSettings({ ...settings, channelId });
+        const updatedSettings = await getSettings();
+        const ui = MenuView(updatedSettings);
+        await snap.request({
+          method: 'snap_updateInterface',
+          params: { id, ui },
+        });
         return;
       }
 
       case FORMS.SET_SERVER_URL: {
-        const serverUrl = formData.serverUrl?.trim() || '';
-        if (serverUrl) {
-          await saveSettings({ ...settings, leaderServerUrl: serverUrl });
-          const ui = SuccessView('Success', `Server URL saved: ${serverUrl}`);
-          await snap.request({
-            method: 'snap_updateInterface',
-            params: { id, ui },
-          });
-        } else {
+        const serverUrl = formData.serverUrl?.trim() ?? '';
+        console.log('Server URL from form:', serverUrl);
+
+        if (!serverUrl) {
           const ui = ErrorView('Please enter a server URL');
           await snap.request({
             method: 'snap_updateInterface',
             params: { id, ui },
           });
+          return;
         }
+
+        await saveSettings({ ...settings, leaderServerUrl: serverUrl });
+        const updatedSettings = await getSettings();
+        const ui = MenuView(updatedSettings);
+        await snap.request({
+          method: 'snap_updateInterface',
+          params: { id, ui },
+        });
         return;
       }
 
       case FORMS.DEPOSIT: {
         const amount = formData.amount?.trim() || '';
-        const mptKey = formData.mptKey?.trim() || '';
 
         if (!amount || parseFloat(amount) <= 0) {
           const ui = ErrorView('Please enter a valid amount');
@@ -1118,16 +1150,8 @@ export const onUserInput: OnUserInputHandler = async ({ id, event }) => {
           return;
         }
 
-        if (!mptKey || !mptKey.startsWith('0x') || mptKey.length !== 66) {
-          const ui = ErrorView('Please enter a valid MPT key (bytes32 format)');
-          await snap.request({
-            method: 'snap_updateInterface',
-            params: { id, ui },
-          });
-          return;
-        }
-
         try {
+          const mptKey = await generateMptKey(settings.channelId, 0);
           const txHash = await executeDeposit(
             settings.channelId,
             amount,
