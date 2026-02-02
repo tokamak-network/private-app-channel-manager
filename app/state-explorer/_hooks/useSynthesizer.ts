@@ -9,7 +9,7 @@ import { useCallback } from "react";
 import { StateSnapshot } from "tokamak-l2js";
 import { createERC20TransferTx } from "@/lib/createERC20TransferTx";
 import { bytesToHex } from "@ethereumjs/util";
-import { TON_TOKEN_ADDRESS } from "@tokamak/config";
+import { TON_TOKEN_ADDRESS, getTokenByAddress } from "@tokamak/config";
 import { parseInputAmount } from "@/lib/utils/format";
 
 export type SynthesizeTxRequest = {
@@ -19,6 +19,7 @@ export type SynthesizeTxRequest = {
   signedTxRlpStr: `0x${string}`;
   previousStateSnapshot: StateSnapshot;
   includeProof: boolean;
+  targetContract?: `0x${string}`;
 };
 
 interface UseSynthesizerParams {
@@ -27,6 +28,7 @@ interface UseSynthesizerParams {
   tokenAmount: string | null;
   keySeed: `0x${string}` | null;
   includeProof: boolean;
+  targetContract?: `0x${string}`;
 }
 
 interface UseSynthesizerReturn {
@@ -46,6 +48,7 @@ export function useSynthesizer({
   tokenAmount,
   keySeed,
   includeProof,
+  targetContract,
 }: UseSynthesizerParams): UseSynthesizerReturn {
   const isFormValid = useCallback((): boolean => {
     return (
@@ -68,15 +71,17 @@ export function useSynthesizer({
         throw new Error("Tx input format is not filled.");
       }
 
-      // Convert token amount to BigInt (wei units, 18 decimals)
-      const amountInWei = parseInputAmount(tokenAmount!.trim(), 18);
+      const effectiveContract = targetContract ?? TON_TOKEN_ADDRESS;
+      const tokenInfo = getTokenByAddress(effectiveContract);
+      const decimals = tokenInfo?.decimals ?? 18;
+      const amountInWei = parseInputAmount(tokenAmount!.trim(), decimals);
 
       const signedTx = await createERC20TransferTx(
         0,
         recipient!,
         amountInWei,
         keySeed!,
-        TON_TOKEN_ADDRESS
+        effectiveContract
       );
       const signedTxStr = bytesToHex(signedTx.serialize());
       const postMessage: SynthesizeTxRequest = {
@@ -86,6 +91,7 @@ export function useSynthesizer({
         signedTxRlpStr: signedTxStr,
         previousStateSnapshot,
         includeProof,
+        targetContract: effectiveContract,
       };
 
       const response = await fetch("/api/tokamak-zk-evm", {
@@ -104,7 +110,7 @@ export function useSynthesizer({
       // Response is a ZIP file blob
       return await response.blob();
     },
-    [channelId, recipient, tokenAmount, keySeed, includeProof, isFormValid]
+    [channelId, recipient, tokenAmount, keySeed, includeProof, targetContract, isFormValid]
   );
 
   return {

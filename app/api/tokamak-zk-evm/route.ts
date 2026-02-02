@@ -16,6 +16,7 @@ import {
   FIXED_TARGET_CONTRACT,
   DEFAULT_NETWORK,
   NETWORKS,
+  getTokenByAddress,
 } from "@tokamak/config";
 import { getProofs, saveProof, deleteProof } from "@/lib/db/channels";
 
@@ -29,9 +30,10 @@ export type SynthesizeTxRequest = {
   channelId: string;
   channelInitTxHash: `0x${string}`;
   signedTxRlpStr: `0x${string}`;
-  previousStateSnapshot: StateSnapshot; // State snapshot JSON object from latest verified proof
-  includeProof: boolean; // If true, also run prove binary and include proof.json
-  chainId?: number; // Chain ID for RPC URL resolution (defaults to Sepolia)
+  previousStateSnapshot: StateSnapshot;
+  includeProof: boolean;
+  chainId?: number;
+  targetContract?: `0x${string}`;
 };
 
 export type VerifyProofRequest = {
@@ -452,7 +454,6 @@ export async function POST(req: Request) {
       return await handleApproveProof(body);
     }
 
-    // Handle synthesize action
     const {
       channelId: rawChannelId,
       channelInitTxHash,
@@ -460,13 +461,24 @@ export async function POST(req: Request) {
       previousStateSnapshot,
       includeProof = false,
       chainId,
+      targetContract,
     } = body;
 
-    // Normalize channelId to lowercase for consistent file/DB operations
     const channelId = String(rawChannelId).toLowerCase();
-
-    // Use provided chainId or default to Sepolia
     const targetChainId = chainId ?? NETWORKS[DEFAULT_NETWORK].id;
+
+    const effectiveTargetContract = targetContract ?? FIXED_TARGET_CONTRACT;
+    if (targetContract) {
+      const tokenInfo = getTokenByAddress(targetContract);
+      if (!tokenInfo) {
+        return NextResponse.json(
+          {
+            error: `Unsupported token address: ${targetContract}. Supported tokens: TON, USDT, USDC`,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const distRoot = getTokamakDistRoot();
     const jobId = Date.now();
@@ -496,15 +508,14 @@ export async function POST(req: Request) {
 
     const contractCode = await getContractCode(
       targetChainId,
-      FIXED_TARGET_CONTRACT,
+      effectiveTargetContract,
       initTxBlockNumber
     );
 
     const contractCodeStr = bytesToHex(contractCode);
-    // New format: array of objects with address and code (PR #174)
     const contractCodesArray = [
       {
-        address: FIXED_TARGET_CONTRACT,
+        address: effectiveTargetContract,
         code: contractCodeStr,
       },
     ];

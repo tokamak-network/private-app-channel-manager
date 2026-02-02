@@ -26,6 +26,7 @@ import {
   FIXED_TARGET_CONTRACT,
   DEFAULT_NETWORK,
   NETWORKS,
+  getTokenByAddress,
 } from "@tokamak/config";
 
 export const runtime = "nodejs";
@@ -55,13 +56,13 @@ function createSSEMessage(data: ProgressEvent): string {
 export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
 
-  // Parse request body
   let body: {
     channelId: string;
     channelInitTxHash: `0x${string}`;
     signedTxRlpStr: `0x${string}`;
     previousStateSnapshot: StateSnapshot;
     chainId?: number;
+    targetContract?: `0x${string}`;
   };
 
   try {
@@ -76,10 +77,24 @@ export async function POST(req: NextRequest) {
     signedTxRlpStr,
     previousStateSnapshot,
     chainId,
+    targetContract,
   } = body;
 
   const channelId = String(rawChannelId).toLowerCase();
   const targetChainId = chainId ?? NETWORKS[DEFAULT_NETWORK].id;
+
+  const effectiveTargetContract = targetContract ?? FIXED_TARGET_CONTRACT;
+  if (targetContract) {
+    const tokenInfo = getTokenByAddress(targetContract);
+    if (!tokenInfo) {
+      return new Response(
+        JSON.stringify({
+          error: `Unsupported token address: ${targetContract}. Supported tokens: TON, USDT, USDC`,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
 
   // Create a readable stream for SSE
   const stream = new ReadableStream({
@@ -170,11 +185,11 @@ export async function POST(req: NextRequest) {
 
         const contractCode = await getContractCode(
           targetChainId,
-          FIXED_TARGET_CONTRACT,
+          effectiveTargetContract,
           initTxBlockNumber
         );
         const contractCodesArray = [
-          { address: FIXED_TARGET_CONTRACT, code: bytesToHex(contractCode) },
+          { address: effectiveTargetContract, code: bytesToHex(contractCode) },
         ];
         const contractCodePath = path.join(
           synthOutputPath,
