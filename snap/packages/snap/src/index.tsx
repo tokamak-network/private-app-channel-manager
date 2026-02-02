@@ -20,6 +20,8 @@ interface ChannelInfo {
   state: number;
   leader: string;
   participantCount: number;
+  tokenAddress: string;
+  tokenSymbol: string;
 }
 
 const CHANNEL_STATES = ['None', 'Initialized', 'Open', 'Closing', 'Closed'];
@@ -120,13 +122,46 @@ async function getChannelParticipants(channelId: string): Promise<string[]> {
   return participants;
 }
 
+async function getChannelTargetContract(channelId: string): Promise<string> {
+  const selector = '0x4991aef9';
+  const callData = selector + encodeBytes32(channelId);
+  const result = await rpcCall('eth_call', [{ to: CONTRACT_ADDRESS, data: callData }, 'latest']);
+  if (!result || result === '0x' || result.length < 42) {
+    return '0x0000000000000000000000000000000000000000';
+  }
+  return '0x' + result.slice(26);
+}
+
+async function getTokenSymbol(tokenAddress: string): Promise<string> {
+  const selector = '0x95d89b41';
+  try {
+    const result = await rpcCall('eth_call', [{ to: tokenAddress, data: selector }, 'latest']);
+    if (!result || result === '0x') {
+      return 'Unknown';
+    }
+    const hex = result.slice(2);
+    const strLength = parseInt(hex.slice(64, 128), 16);
+    const strHex = hex.slice(128, 128 + strLength * 2);
+    let symbol = '';
+    for (let i = 0; i < strHex.length; i += 2) {
+      const charCode = parseInt(strHex.slice(i, i + 2), 16);
+      if (charCode > 0) symbol += String.fromCharCode(charCode);
+    }
+    return symbol || 'Unknown';
+  } catch {
+    return 'Unknown';
+  }
+}
+
 async function getChannelInfo(channelId: string): Promise<ChannelInfo> {
-  const [state, leader, participants] = await Promise.all([
+  const [state, leader, participants, tokenAddress] = await Promise.all([
     getChannelState(channelId),
     getChannelLeader(channelId),
     getChannelParticipants(channelId),
+    getChannelTargetContract(channelId),
   ]);
-  return { state, leader, participantCount: participants.length };
+  const tokenSymbol = await getTokenSymbol(tokenAddress);
+  return { state, leader, participantCount: participants.length, tokenAddress, tokenSymbol };
 }
 
 function formatAddress(address: string): string {
@@ -184,6 +219,9 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ request }) => {
                 </Row>
                 <Row label="Participants">
                   <Text>{info.participantCount.toString()}</Text>
+                </Row>
+                <Row label="Token">
+                  <Text>{info.tokenSymbol}</Text>
                 </Row>
                 <Row label="Leader">
                   <Address address={info.leader as `0x${string}`} />
@@ -326,6 +364,9 @@ export const onHomePage: OnHomePageHandler = async () => {
           </Row>
           <Row label="Participants">
             <Text>{info.participantCount.toString()}</Text>
+          </Row>
+          <Row label="Token">
+            <Text>{info.tokenSymbol}</Text>
           </Row>
           <Row label="Leader">
             <Address address={info.leader as `0x${string}`} />
