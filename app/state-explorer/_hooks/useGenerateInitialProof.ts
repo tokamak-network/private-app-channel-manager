@@ -281,28 +281,23 @@ export function useGenerateInitialProof({
       }
 
       // STEP 2: Add participant data AFTER pre-allocated leaves
-      // For multi-token support, we need to add entries for each (participant, slotIndex) pair
+      // IMPORTANT: Loop order must match contract's initializeChannelState:
+      // Contract iterates: slot -> participant (outer: slots, inner: participants)
       setStatus(`Processing ${participantCount} participants with ${numSlots} slots each...`);
 
-      for (
-        let i = 0;
-        i < participants.length && storageKeysL2MPT.length < treeSize;
-        i++
-      ) {
-        const participant = participants[i];
+      for (let slotIndex = 0; slotIndex < numSlots && storageKeysL2MPT.length < treeSize; slotIndex++) {
+        setStatus(`Processing slot ${slotIndex + 1} of ${numSlots}...`);
 
-        setStatus(`Processing participant ${i + 1} of ${participantCount}...`);
-
-        // Process each slot for this participant
-        for (let slotIndex = 0; slotIndex < numSlots && storageKeysL2MPT.length < treeSize; slotIndex++) {
+        for (
+          let i = 0;
+          i < participants.length && storageKeysL2MPT.length < treeSize;
+          i++
+        ) {
+          const participant = participants[i];
           let l2MptKey = "0";
           let slotValue = "0";
 
           try {
-            // Use publicClient.readContract directly to bypass React Query cache
-            // This ensures fresh data is fetched from the blockchain after deposits
-            // getL2MptKey now requires slotIndex parameter
-            // getValidatedUserSlotValue replaces getParticipantDeposit for multi-slot support
             const [l2MptKeyResultRaw, slotValueResultRaw] = await Promise.all([
               publicClient.readContract({
                 address: bridgeCoreAddress,
@@ -330,7 +325,6 @@ export function useGenerateInitialProof({
               console.error(`Slot value fetch failed for ${participant} slot ${slotIndex}`);
             }
 
-            // Apply modulo R_MOD as the contract does
             const modedL2MptKey =
               l2MptKey !== "0" ? (BigInt(l2MptKey) % R_MOD).toString() : "0";
             const modedSlotValue =
@@ -340,7 +334,7 @@ export function useGenerateInitialProof({
             storageValues.push(modedSlotValue);
 
             console.log(
-              `Participant ${i} slot ${slotIndex}: key=${l2MptKey} -> ${modedL2MptKey}, value=${slotValue} -> ${modedSlotValue}`
+              `Slot ${slotIndex} participant ${i}: key=${l2MptKey} -> ${modedL2MptKey}, value=${slotValue} -> ${modedSlotValue}`
             );
           } catch (error) {
             console.error(`Failed to get data for ${participant} slot ${slotIndex}:`, error);
