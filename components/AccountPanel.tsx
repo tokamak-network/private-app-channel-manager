@@ -95,6 +95,28 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
     channelExists,
   } = useChannelParticipantCheck(channelIdInput);
 
+  const [channelTargetContract, setChannelTargetContract] = useState<string | null>(null);
+  useEffect(() => {
+    if (!channelIdInput || !isValidBytes32(channelIdInput)) {
+      setChannelTargetContract(null);
+      return;
+    }
+    const fetchTargetContract = async () => {
+      try {
+        const response = await fetch(`/api/channels/${encodeURIComponent(channelIdInput.toLowerCase())}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data?.targetContract) {
+            setChannelTargetContract(data.data.targetContract);
+          }
+        }
+      } catch {
+        // Ignore errors - will use default slot 0
+      }
+    };
+    fetchTargetContract();
+  }, [channelIdInput]);
+
   // Use common hook for L2 address and MPT key generation
   const {
     generate,
@@ -118,6 +140,7 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
   } = useChannelUserBalance({
     channelId: isChannelLoaded ? channelIdInput : null,
     mptKey,
+    tokenAddress: channelTargetContract,
   });
 
   // Determine validation state

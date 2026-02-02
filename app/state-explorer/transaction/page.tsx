@@ -26,7 +26,7 @@ import { useChannelUserBalance } from "@/hooks/useChannelUserBalance";
 import { useToken } from "../_context";
 
 function TransactionPage() {
-  const { tokenSymbol, tokenDecimals } = useToken();
+  const { tokenSymbol, tokenDecimals, tokenAddress } = useToken();
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { currentChannelId } = useChannelFlowStore();
@@ -67,6 +67,7 @@ function TransactionPage() {
     channelId: currentChannelId || null,
     mptKey: mptKeyHex,
     decimals: tokenDecimals,
+    tokenAddress,
   });
 
   // Form state

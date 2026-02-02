@@ -13,6 +13,7 @@ import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import { isValidBytes32 } from "@/lib/channelId";
 import { useBridgeCoreRead } from "@/hooks/contract";
+import { ERC20_TRANSFER } from "@tokamak/config";
 import JSZip from "jszip";
 
 interface StateSnapshot {
@@ -42,12 +43,15 @@ interface UseChannelUserBalanceParams {
   channelId: string | null;
   mptKey: string | null;
   decimals?: number;
+  /** Token address to determine correct slot index (default: TON = slot 0) */
+  tokenAddress?: string | null;
 }
 
 export function useChannelUserBalance({
   channelId,
   mptKey,
   decimals = 18,
+  tokenAddress,
 }: UseChannelUserBalanceParams): ChannelUserBalanceResult {
   const { address } = useAccount();
   
@@ -57,13 +61,22 @@ export function useChannelUserBalance({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Get slot index from token address (TON=0, USDT=1, USDC=2)
+  const slotIndex = (() => {
+    if (!tokenAddress) return 0;
+    const normalizedAddress = tokenAddress.toLowerCase();
+    const entry = Object.entries(ERC20_TRANSFER).find(
+      ([key]) => key.toLowerCase() === normalizedAddress
+    );
+    return entry ? entry[1].slot : 0;
+  })();
+
   // Fetch initial deposit from on-chain (fallback)
-  // Updated for new contract: uses getValidatedUserSlotValue with slotIndex 0
   const { data: initialDeposit, isLoading: isLoadingDeposit } = useBridgeCoreRead({
     functionName: "getValidatedUserSlotValue",
     args:
       channelId && address && isValidBytes32(channelId)
-        ? [channelId as `0x${string}`, address, 0]
+        ? [channelId as `0x${string}`, address, slotIndex]
         : undefined,
     query: {
       enabled: !!channelId && !!address && isValidBytes32(channelId),
