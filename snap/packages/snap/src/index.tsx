@@ -1,4 +1,4 @@
-import type { OnRpcRequestHandler } from '@metamask/snaps-sdk';
+import type { OnRpcRequestHandler, OnHomePageHandler } from '@metamask/snaps-sdk';
 import type { Json } from '@metamask/snaps-sdk';
 import {
   Box,
@@ -48,35 +48,69 @@ async function saveSettings(settings: Settings): Promise<void> {
   });
 }
 
-async function rpcCall(method: string, params: unknown[]): Promise<unknown> {
-  const response = await fetch(RPC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 }),
-  });
-  const data = await response.json();
-  return data.result;
+async function rpcCall(method: string, params: unknown[]): Promise<string> {
+  try {
+    const body = JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 });
+    console.log('RPC Request:', body);
+    
+    const response = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+    
+    const data = await response.json();
+    console.log('RPC Response:', JSON.stringify(data));
+    
+    if (data.error) {
+      throw new Error(`RPC error: ${JSON.stringify(data.error)}`);
+    }
+    if (!data.result) {
+      throw new Error('No result from RPC');
+    }
+    return data.result;
+  } catch (e) {
+    console.error('RPC call error:', e);
+    throw e;
+  }
+}
+
+function encodeBytes32(channelId: string): string {
+  const hex = channelId.startsWith('0x') ? channelId.slice(2) : channelId;
+  if (hex.length !== 64) {
+    throw new Error(`Invalid bytes32: expected 64 hex chars, got ${hex.length}`);
+  }
+  return hex;
 }
 
 async function getChannelState(channelId: string): Promise<number> {
   const selector = '0xd18da8b1';
-  const data = selector + channelId.slice(2);
-  const result = await rpcCall('eth_call', [{ to: CONTRACT_ADDRESS, data }, 'latest']);
-  return parseInt(result as string, 16);
+  const callData = selector + encodeBytes32(channelId);
+  const result = await rpcCall('eth_call', [{ to: CONTRACT_ADDRESS, data: callData }, 'latest']);
+  if (!result || result === '0x') {
+    return 0;
+  }
+  return parseInt(result, 16);
 }
 
 async function getChannelLeader(channelId: string): Promise<string> {
   const selector = '0x842d86ba';
-  const data = selector + channelId.slice(2);
-  const result = await rpcCall('eth_call', [{ to: CONTRACT_ADDRESS, data }, 'latest']);
-  return '0x' + (result as string).slice(26);
+  const callData = selector + encodeBytes32(channelId);
+  const result = await rpcCall('eth_call', [{ to: CONTRACT_ADDRESS, data: callData }, 'latest']);
+  if (!result || result === '0x' || result.length < 42) {
+    return '0x0000000000000000000000000000000000000000';
+  }
+  return '0x' + result.slice(26);
 }
 
 async function getChannelParticipants(channelId: string): Promise<string[]> {
-  const selector = '0x8e7cb6e1';
-  const data = selector + channelId.slice(2);
-  const result = await rpcCall('eth_call', [{ to: CONTRACT_ADDRESS, data }, 'latest']);
-  const hex = (result as string).slice(2);
+  const selector = '0xba5b0880';
+  const callData = selector + encodeBytes32(channelId);
+  const result = await rpcCall('eth_call', [{ to: CONTRACT_ADDRESS, data: callData }, 'latest']);
+  if (!result || result === '0x' || result.length < 130) {
+    return [];
+  }
+  const hex = result.slice(2);
   const count = parseInt(hex.slice(64, 128), 16);
   const participants: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -96,6 +130,7 @@ async function getChannelInfo(channelId: string): Promise<ChannelInfo> {
 }
 
 function formatAddress(address: string): string {
+  if (!address || address.length < 10) return 'Unknown';
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
@@ -114,7 +149,7 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ request }) => {
                 <Heading>Tokamak Channels</Heading>
                 <Divider />
                 <Text>No channel configured.</Text>
-                <Text>Use 'Configure Settings' to set up your channel.</Text>
+                <Text>Click "Set Channel ID" to configure your channel.</Text>
               </Box>
             ),
           },
@@ -122,7 +157,15 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ request }) => {
       }
 
       try {
-        const info = await getChannelInfo(settings.channelId);
+        const channelId = settings.channelId.trim();
+        console.log('Channel ID:', channelId, 'Length:', channelId.length);
+        
+        if (!channelId.startsWith('0x') || channelId.length !== 66) {
+          throw new Error(`Invalid channel ID format: ${channelId.length} chars`);
+        }
+        
+        const info = await getChannelInfo(channelId);
+        console.log('Channel Info:', info);
         return snap.request({
           method: 'snap_dialog',
           params: {
@@ -162,7 +205,7 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ request }) => {
               <Box>
                 <Heading>Error</Heading>
                 <Text>Failed to load channel info.</Text>
-                <Text>{e instanceof Error ? e.message : 'Unknown error'}</Text>
+                <Text>{e instanceof Error ? e.message : String(e)}</Text>
               </Box>
             ),
           },
@@ -186,7 +229,7 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ request }) => {
               ) : null}
             </Box>
           ),
-          placeholder: settings.channelId || '0x...',
+          placeholder: '0x...',
         },
       });
 
@@ -213,7 +256,7 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ request }) => {
               ) : null}
             </Box>
           ),
-          placeholder: settings.leaderServerUrl || 'http://localhost:3000',
+          placeholder: 'http://localhost:3000',
         },
       });
 
@@ -247,5 +290,66 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ request }) => {
 
     default:
       throw new Error('Method not found.');
+  }
+};
+
+export const onHomePage: OnHomePageHandler = async () => {
+  const settings = await getSettings();
+
+  if (!settings.channelId) {
+    return {
+      content: (
+        <Box>
+          <Heading>Tokamak Channels</Heading>
+          <Divider />
+          <Text>No channel configured.</Text>
+          <Text>Use a dApp to set your Channel ID.</Text>
+        </Box>
+      ),
+    };
+  }
+
+  try {
+    const info = await getChannelInfo(settings.channelId);
+    return {
+      content: (
+        <Box>
+          <Heading>Tokamak Channels</Heading>
+          <Divider />
+          <Row label="Channel">
+            <Text>{formatAddress(settings.channelId)}</Text>
+          </Row>
+          <Row label="Status">
+            <Text>
+              <Bold>{CHANNEL_STATES[info.state] || 'Unknown'}</Bold>
+            </Text>
+          </Row>
+          <Row label="Participants">
+            <Text>{info.participantCount.toString()}</Text>
+          </Row>
+          <Row label="Leader">
+            <Address address={info.leader as `0x${string}`} />
+          </Row>
+          {settings.leaderServerUrl ? (
+            <Row label="Server">
+              <Text>{settings.leaderServerUrl}</Text>
+            </Row>
+          ) : null}
+        </Box>
+      ),
+    };
+  } catch (e) {
+    return {
+      content: (
+        <Box>
+          <Heading>Tokamak Channels</Heading>
+          <Divider />
+          <Row label="Channel">
+            <Text>{formatAddress(settings.channelId)}</Text>
+          </Row>
+          <Text>Failed to load channel info.</Text>
+        </Box>
+      ),
+    };
   }
 };

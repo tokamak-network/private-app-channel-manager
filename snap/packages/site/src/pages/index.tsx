@@ -4,7 +4,6 @@ import {
   ConnectButton,
   InstallFlaskButton,
   ReconnectButton,
-  SendHelloButton,
   Card,
 } from '../components';
 import { defaultSnapOrigin } from '../config';
@@ -100,6 +99,31 @@ const ErrorMessage = styled.div`
   }
 `;
 
+const Button = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: ${({ theme }) => theme.colors.primary?.default};
+  color: ${({ theme }) => theme.colors.primary?.inverse};
+  border: none;
+  border-radius: ${({ theme }) => theme.radii.button};
+  padding: 1rem 2rem;
+  font-size: ${({ theme }) => theme.fontSizes.small};
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primary?.main};
+  }
+
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.background?.alternative};
+    color: ${({ theme }) => theme.colors.text?.muted};
+    cursor: not-allowed;
+  }
+`;
+
 const Index = () => {
   const { error } = useMetaMaskContext();
   const { isFlask, snapsDetected, installedSnap } = useMetaMask();
@@ -110,17 +134,30 @@ const Index = () => {
     ? isFlask
     : snapsDetected;
 
-  const handleSendHelloClick = async () => {
-    await invokeSnap({ method: 'hello' });
+  const handleShowHome = async () => {
+    await invokeSnap({ method: 'showHome' });
+  };
+
+  const handleConfigureChannel = async () => {
+    await invokeSnap({ method: 'configureSettings' });
+  };
+
+  const handleConfigureServer = async () => {
+    await invokeSnap({ method: 'configureServer' });
+  };
+
+  const handleGetChannelInfo = async () => {
+    const result = await invokeSnap({ method: 'getChannelInfo' });
+    console.log('Channel Info:', result);
   };
 
   return (
     <Container>
       <Heading>
-        Welcome to <Span>template-snap</Span>
+        <Span>Tokamak Channels</Span>
       </Heading>
       <Subtitle>
-        Get started by editing <code>src/index.tsx</code>
+        Layer 2 State Channel with ZK Proof Verification
       </Subtitle>
       <CardContainer>
         {error && (
@@ -131,7 +168,7 @@ const Index = () => {
         {!isMetaMaskReady && (
           <Card
             content={{
-              title: 'Install',
+              title: 'Install MetaMask Flask',
               description:
                 'Snaps is pre-release software only available in MetaMask Flask, a canary distribution for developers with access to upcoming features.',
               button: <InstallFlaskButton />,
@@ -142,9 +179,9 @@ const Index = () => {
         {!installedSnap && (
           <Card
             content={{
-              title: 'Connect',
+              title: 'Connect & Install Snap',
               description:
-                'Get started by connecting to and installing the example snap.',
+                'Connect to MetaMask Flask and install the Tokamak Channels Snap.',
               button: (
                 <ConnectButton
                   onClick={requestSnap}
@@ -160,7 +197,7 @@ const Index = () => {
             content={{
               title: 'Reconnect',
               description:
-                'While connected to a local running snap this button will always be displayed in order to update the snap if a change is made.',
+                'Update the snap after making changes to the code.',
               button: (
                 <ReconnectButton
                   onClick={requestSnap}
@@ -173,29 +210,56 @@ const Index = () => {
         )}
         <Card
           content={{
-            title: 'Send Hello message',
+            title: 'Channel Dashboard',
             description:
-              'Display a custom message within a confirmation screen in MetaMask.',
+              'View your channel status, participants, and leader information.',
             button: (
-              <SendHelloButton
-                onClick={handleSendHelloClick}
+              <Button
+                onClick={handleShowHome}
                 disabled={!installedSnap}
-              />
+              >
+                Show Dashboard
+              </Button>
             ),
           }}
           disabled={!installedSnap}
-          fullWidth={
-            isMetaMaskReady &&
-            Boolean(installedSnap) &&
-            !shouldDisplayReconnectButton(installedSnap)
-          }
+        />
+        <Card
+          content={{
+            title: 'Configure Channel',
+            description:
+              'Set your Channel ID (bytes32) to connect to a channel.',
+            button: (
+              <Button
+                onClick={handleConfigureChannel}
+                disabled={!installedSnap}
+              >
+                Set Channel ID
+              </Button>
+            ),
+          }}
+          disabled={!installedSnap}
+        />
+        <Card
+          content={{
+            title: 'Configure Server',
+            description:
+              'Set the Leader Server URL for L2 transactions.',
+            button: (
+              <Button
+                onClick={handleConfigureServer}
+                disabled={!installedSnap}
+              >
+                Set Server URL
+              </Button>
+            ),
+          }}
+          disabled={!installedSnap}
         />
         <Notice>
           <p>
-            Please note that the <b>snap.manifest.json</b> and{' '}
-            <b>package.json</b> must be located in the server root directory and
-            the bundle must be hosted at the location specified by the location
-            field.
+            <b>Tokamak Private App Channels</b> - Execute off-chain ERC20 transactions 
+            with ZK proof verification. Don't Trust. Verify.
           </p>
         </Notice>
       </CardContainer>
