@@ -467,27 +467,17 @@ export async function POST(req: Request) {
     const channelId = String(rawChannelId).toLowerCase();
     const targetChainId = chainId ?? NETWORKS[DEFAULT_NETWORK].id;
 
-    const effectiveTargetContract = (
-      targetContract ?? previousStateSnapshot?.contractAddress
-    ) as `0x${string}` | undefined;
-
-    if (!effectiveTargetContract) {
-      return NextResponse.json(
-        {
-          error: "Missing target contract address. Provide targetContract or previousStateSnapshot.contractAddress",
-        },
-        { status: 400 }
-      );
-    }
-
-    const tokenInfo = getTokenByAddress(effectiveTargetContract);
-    if (!tokenInfo) {
-      return NextResponse.json(
-        {
-          error: `Unsupported token address: ${effectiveTargetContract}. Supported tokens: TON, USDT, USDC`,
-        },
-        { status: 400 }
-      );
+    const effectiveTargetContract = targetContract ?? FIXED_TARGET_CONTRACT;
+    if (targetContract) {
+      const tokenInfo = getTokenByAddress(targetContract);
+      if (!tokenInfo) {
+        return NextResponse.json(
+          {
+            error: `Unsupported token address: ${targetContract}. Supported tokens: TON, USDT, USDC`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const distRoot = getTokamakDistRoot();
@@ -588,24 +578,18 @@ export async function POST(req: Request) {
           console.warn(`--${label} stderr:`, stderr);
 
           // Check for synthesizer errors in stderr
-          // Note: "Undefined synthesizer handler for opcode INVALID" is logged but not fatal
-          // Old Solidity contracts (like USDT) use INVALID opcode, but synthesizer handles it gracefully
           const stderrStr = String(stderr);
-          const isInvalidOpcodeWarning =
-            stderrStr.includes("Undefined synthesizer handler") &&
-            stderrStr.includes("opcode INVALID");
-          const hasFatalSynthesizerError =
+          const hasSynthesizerError =
             stderrStr.includes("Synthesizer: step error:") ||
             stderrStr.includes("Synthesizer: Handler:") ||
             (stderrStr.includes("Synthesizer:") &&
               stderrStr.includes("Output data mismatch")) ||
             (stderrStr.includes("Synthesizer:") &&
-              stderrStr.includes("error:") &&
-              !isInvalidOpcodeWarning) ||
-            (stderrStr.includes("Undefined synthesizer handler") &&
-              !isInvalidOpcodeWarning);
+              stderrStr.includes("error:")) ||
+            stderrStr.includes("Undefined synthesizer handler");
 
-          if (hasFatalSynthesizerError) {
+          if (hasSynthesizerError) {
+            // Extract the first error message
             const errorMatch = stderrStr.match(/error: (.+?)(?:\n|$)/);
             const errorMessage = errorMatch
               ? errorMatch[1]
@@ -618,21 +602,16 @@ export async function POST(req: Request) {
         // If execFileAsync throws, check stderr for synthesizer errors
         if (execError.stderr) {
           const stderrStr = String(execError.stderr);
-          const isInvalidOpcodeWarning =
-            stderrStr.includes("Undefined synthesizer handler") &&
-            stderrStr.includes("opcode INVALID");
-          const hasFatalSynthesizerError =
+          const hasSynthesizerError =
             stderrStr.includes("Synthesizer: step error:") ||
             stderrStr.includes("Synthesizer: Handler:") ||
             (stderrStr.includes("Synthesizer:") &&
               stderrStr.includes("Output data mismatch")) ||
             (stderrStr.includes("Synthesizer:") &&
-              stderrStr.includes("error:") &&
-              !isInvalidOpcodeWarning) ||
-            (stderrStr.includes("Undefined synthesizer handler") &&
-              !isInvalidOpcodeWarning);
+              stderrStr.includes("error:")) ||
+            stderrStr.includes("Undefined synthesizer handler");
 
-          if (hasFatalSynthesizerError) {
+          if (hasSynthesizerError) {
             const errorMatch = stderrStr.match(/error: (.+?)(?:\n|$)/);
             const errorMessage = errorMatch
               ? errorMatch[1]

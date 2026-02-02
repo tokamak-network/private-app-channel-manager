@@ -83,27 +83,17 @@ export async function POST(req: NextRequest) {
   const channelId = String(rawChannelId).toLowerCase();
   const targetChainId = chainId ?? NETWORKS[DEFAULT_NETWORK].id;
 
-  const effectiveTargetContract = (
-    targetContract ?? previousStateSnapshot?.contractAddress
-  ) as `0x${string}` | undefined;
-
-  if (!effectiveTargetContract) {
-    return new Response(
-      JSON.stringify({
-        error: "Missing target contract address. Provide targetContract or previousStateSnapshot.contractAddress",
-      }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  const tokenInfo = getTokenByAddress(effectiveTargetContract);
-  if (!tokenInfo) {
-    return new Response(
-      JSON.stringify({
-        error: `Unsupported token address: ${effectiveTargetContract}. Supported tokens: TON, USDT, USDC`,
-      }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+  const effectiveTargetContract = targetContract ?? FIXED_TARGET_CONTRACT;
+  if (targetContract) {
+    const tokenInfo = getTokenByAddress(targetContract);
+    if (!tokenInfo) {
+      return new Response(
+        JSON.stringify({
+          error: `Unsupported token address: ${targetContract}. Supported tokens: TON, USDT, USDC`,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
   }
 
   // Create a readable stream for SSE
@@ -161,15 +151,12 @@ export async function POST(req: NextRequest) {
 
           if (stderr) {
             const stderrStr = String(stderr);
-            // Note: "Undefined synthesizer handler for opcode INVALID" is logged but not fatal
-            // Old Solidity contracts (like USDT) use INVALID opcode, but synthesizer handles it gracefully
-            const hasFatalSynthesizerError =
+            const hasSynthesizerError =
               stderrStr.includes("Synthesizer: step error:") ||
               stderrStr.includes("Synthesizer: Handler:") ||
-              (stderrStr.includes("Undefined synthesizer handler") &&
-                !stderrStr.includes("opcode INVALID"));
+              stderrStr.includes("Undefined synthesizer handler");
 
-            if (hasFatalSynthesizerError) {
+            if (hasSynthesizerError) {
               const errorMatch = stderrStr.match(/error: (.+?)(?:\n|$)/);
               const errorMessage = errorMatch
                 ? errorMatch[1]

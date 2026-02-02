@@ -9,7 +9,7 @@
  * Note: This is in a separate file to avoid import conflicts with tokamakl2js.ts
  */
 import { addHexPrefix, bigIntToBytes, concatBytes, createAddressFromString, hexToBytes, setLengthLeft } from "@ethereumjs/util";
-import { getERC20TransferConfig } from "@tokamak/config";
+import { ERC20_TRANSFER } from "@tokamak/config";
 import { Common, CommonOpts, Mainnet } from "@ethereumjs/common";
 import {
   TokamakL2Tx,
@@ -39,11 +39,12 @@ export async function createERC20TransferTx(
   keySeed: `0x${string}`,
   tokenAddress: `0x${string}`
 ): Promise<TokamakL2Tx> {
-  const tokenConfig = getERC20TransferConfig(tokenAddress);
-  const account = deriveL2KeysAndAddressFromSignature(keySeed, tokenConfig.slot);
+  // Derive L2 account from signature
+  const account = deriveL2KeysAndAddressFromSignature(keySeed, ERC20_TRANSFER[tokenAddress].slot);
 
+  // Create calldata for ERC20 transfer
   const calldata = concatBytes(
-    setLengthLeft(hexToBytes(tokenConfig.selector), 4),
+    setLengthLeft(hexToBytes(ERC20_TRANSFER[tokenAddress].selector), 4),
     setLengthLeft(hexToBytes(recipient), 32),
     setLengthLeft(bigIntToBytes(amount), 32)
   );
