@@ -259,21 +259,21 @@ export function usePreviousStateSnapshot({
       }
 
       // Fetch participants' MPT keys and slot values using common contract hook
-      // For multi-token support, we now iterate through all slots for each participant
+      // IMPORTANT: Loop order must match contract's initializeChannelState:
+      // Contract iterates: slot -> participant (outer: slots, inner: participants)
       const storageEntries: Array<{ key: string; value: string }> = [];
 
       if (participants.length > 0) {
-        // Build array of all (participant, slotIndex) combinations
-        const participantSlotCombinations: Array<{ participant: `0x${string}`; slotIndex: number }> = [];
-        for (const participant of participants) {
-          for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
-            participantSlotCombinations.push({ participant, slotIndex });
+        const slotParticipantCombinations: Array<{ slotIndex: number; participant: `0x${string}` }> = [];
+        for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
+          for (const participant of participants) {
+            slotParticipantCombinations.push({ slotIndex, participant });
           }
         }
 
         // Fetch all MPT keys and slot values in parallel
         const participantDataResults = await Promise.all(
-          participantSlotCombinations.flatMap(({ participant, slotIndex }) => [
+          slotParticipantCombinations.flatMap(({ slotIndex, participant }) => [
             readBridgeCoreContract<bigint>(
               config,
               bridgeCoreAddress,
@@ -295,7 +295,7 @@ export function usePreviousStateSnapshot({
           ])
         );
 
-        participantSlotCombinations.forEach(({ participant, slotIndex }, index) => {
+        slotParticipantCombinations.forEach(({ slotIndex, participant }, index) => {
           const mptKey = participantDataResults[index * 2] as bigint;
           const slotValue = participantDataResults[index * 2 + 1] as bigint;
 

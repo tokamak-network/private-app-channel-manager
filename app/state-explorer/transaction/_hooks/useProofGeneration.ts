@@ -71,26 +71,24 @@ export function useProofGeneration({
       abortControllerRef.current = new AbortController();
 
       try {
-        // Import required modules for creating signed transaction
         const { createERC20TransferTx } = await import(
           "@/lib/createERC20TransferTx"
         );
         const { bytesToHex } = await import("@ethereumjs/util");
-        const { TON_TOKEN_ADDRESS } = await import("@tokamak/config");
-        const { parseInputAmount } = await import("@/lib/utils/format");
+        const { parseInputAmount, getTokenDecimals } = await import("@/lib/utils/format");
 
-        // Create signed L2 transaction
-        const amountInWei = parseInputAmount(params.tokenAmount.trim(), 18);
+        const targetContract = params.previousStateSnapshot.contractAddress as `0x${string}`;
+        const decimals = getTokenDecimals(targetContract);
+        const amountInWei = parseInputAmount(params.tokenAmount.trim(), decimals);
         const signedTx = await createERC20TransferTx(
           0,
           params.recipient,
           amountInWei,
           params.keySeed,
-          TON_TOKEN_ADDRESS
+          targetContract
         );
         const signedTxStr = bytesToHex(signedTx.serialize());
 
-        // Make SSE request
         const response = await fetch("/api/tokamak-zk-evm/synthesize-stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -99,6 +97,7 @@ export function useProofGeneration({
             channelInitTxHash: params.initTxHash,
             signedTxRlpStr: signedTxStr,
             previousStateSnapshot: params.previousStateSnapshot,
+            targetContract,
           }),
           signal: abortControllerRef.current.signal,
         });

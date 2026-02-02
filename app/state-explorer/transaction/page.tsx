@@ -165,22 +165,24 @@ function TransactionPage() {
     // Import required modules
     const { createERC20TransferTx } = await import("@/lib/createERC20TransferTx");
     const { bytesToHex } = await import("@ethereumjs/util");
-    const { TON_TOKEN_ADDRESS } = await import("@tokamak/config");
-    const { parseInputAmount } = await import("@/lib/utils/format");
+    const { parseInputAmount, getTokenDecimals } = await import("@/lib/utils/format");
     const JSZip = (await import("jszip")).default;
 
+    // Get target contract from previous state snapshot
+    const targetContract = previousStateSnapshot.contractAddress as `0x${string}`;
+    const decimals = getTokenDecimals(targetContract);
+
     // Create signed L2 transaction
-    const amountInWei = parseInputAmount(tokenAmount.trim(), 18);
+    const amountInWei = parseInputAmount(tokenAmount.trim(), decimals);
     const signedTx = await createERC20TransferTx(
       0,
       recipient,
       amountInWei,
       keySeed,
-      TON_TOKEN_ADDRESS
+      targetContract
     );
     const signedTxStr = bytesToHex(signedTx.serialize());
 
-    // Make SSE request for proof generation with progress
     const response = await fetch("/api/tokamak-zk-evm/synthesize-stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -189,6 +191,7 @@ function TransactionPage() {
         channelInitTxHash: initTxHash,
         signedTxRlpStr: signedTxStr,
         previousStateSnapshot,
+        targetContract,
       }),
     });
 

@@ -3,6 +3,7 @@
  */
 
 import { parseUnits } from "viem";
+import { SUPPORTED_TOKENS, TON_TOKEN_ADDRESS } from "@tokamak/config";
 
 /**
  * Format Ethereum address
@@ -72,4 +73,19 @@ export function formatWithCommas(value: string): string {
   const parts = value.split('.');
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return parts.join('.');
+}
+
+/**
+ * Get token decimals by contract address
+ */
+export function getTokenDecimals(contractAddress: `0x${string}`): number {
+  const normalizedAddress = contractAddress.toLowerCase();
+  
+  for (const token of Object.values(SUPPORTED_TOKENS)) {
+    if (token.address.toLowerCase() === normalizedAddress) {
+      return token.decimals;
+    }
+  }
+  
+  return 18;
 }

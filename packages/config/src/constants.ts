@@ -183,19 +183,27 @@ export const USDC_TOKEN_ADDRESS =
  * ERC20 Transfer function selectors and slot indices
  */
 export const ERC20_TRANSFER: Record<
-  `0x${string}`,
+  string,
   { selector: `0x${string}`; slot: number }
 > = {
-  [TON_TOKEN_ADDRESS]: {
+  [TON_TOKEN_ADDRESS.toLowerCase()]: {
     selector: "0xa9059cbb",
     slot: 0,
   },
-  ["0x42d3b260c761cD5da022dB56Fe2F89c4A909b04A" as `0x${string}`]: {
+  [USDT_TOKEN_ADDRESS.toLowerCase()]: {
     selector: "0xa9059cbb",
     slot: 1,
   },
-  [USDC_TOKEN_ADDRESS]: {
+  [USDC_TOKEN_ADDRESS.toLowerCase()]: {
     selector: "0xa9059cbb",
     slot: 2,
   },
 };
+
+export function getERC20TransferConfig(tokenAddress: string): { selector: `0x${string}`; slot: number } {
+  const config = ERC20_TRANSFER[tokenAddress.toLowerCase()];
+  if (!config) {
+    throw new Error(`Unsupported token address: ${tokenAddress}`);
+  }
+  return config;
+}
