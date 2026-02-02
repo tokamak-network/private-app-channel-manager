@@ -209,6 +209,7 @@ export default function StateExplorerLayout({
 
   return (
     <AppLayout>
+      <TokenProvider targetContract={targetContract} isLoading={!targetContract}>
       <div className="space-y-6">
         {/* Header - Channel ID */}
         <div className="flex items-center gap-8">
@@ -286,9 +287,7 @@ export default function StateExplorerLayout({
         )}
 
         {/* Page Content */}
-        <TokenProvider targetContract={targetContract} isLoading={!targetContract}>
-          <div>{children}</div>
-        </TokenProvider>
+        <div>{children}</div>
       </div>
 
       {/* Initialize State Confirm Modal */}
@@ -303,6 +302,7 @@ export default function StateExplorerLayout({
           onClose={handleCloseModal}
         />
       )}
+      </TokenProvider>
     </AppLayout>
   );
 }
