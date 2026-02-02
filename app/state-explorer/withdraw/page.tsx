@@ -17,11 +17,13 @@ import { useWithdraw } from "./_hooks";
 import { WithdrawConfirmModal } from "./_components";
 import { formatUnits } from "viem";
 import Image from "next/image";
+import { useToken } from "../_context";
 
-// Token symbol images
+// TODO: Add dynamic token icons based on tokenSymbol
 import TONSymbol from "@/assets/symbols/TON.svg";
 
 function WithdrawPage() {
+  const { tokenSymbol, tokenDecimals } = useToken();
   const { currentChannelId } = useChannelFlowStore();
   const {
     handleWithdraw,
@@ -36,12 +38,10 @@ function WithdrawPage() {
   // Modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Format withdrawable amount (assuming 18 decimals for ERC20 tokens)
-  const formattedAmount = formatUnits(withdrawableAmount, 18);
+  const formattedAmount = formatUnits(withdrawableAmount, tokenDecimals);
 
-  // Token balances - currently only TON is supported
   const tokenBalances = [
-    { symbol: "TON", amount: formattedAmount, icon: TONSymbol },
+    { symbol: tokenSymbol, amount: formattedAmount, icon: TONSymbol },
   ];
 
   const handleOpenModal = () => {
@@ -60,7 +60,7 @@ function WithdrawPage() {
         <WithdrawConfirmModal
           channelId={currentChannelId}
           amount={formattedAmount}
-          tokenSymbol="TON"
+          tokenSymbol={tokenSymbol}
           onWithdraw={handleWithdraw}
           isProcessing={isWithdrawing}
           txHash={withdrawTxHash ?? null}

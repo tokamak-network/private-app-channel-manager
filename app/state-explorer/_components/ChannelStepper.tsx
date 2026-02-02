@@ -13,6 +13,7 @@
 import { Check } from "lucide-react";
 import { useBridgeCoreRead } from "@/hooks/contract";
 import { formatUnits } from "viem";
+import { useToken } from "../_context";
 
 // Contract channel states: 0=None, 1=Initialized, 2=Open, 3=Closing, 4=Closed
 type ContractChannelState = 0 | 1 | 2 | 3 | 4;
@@ -68,6 +69,7 @@ export function ChannelStepper({
   userAddress,
   hasWithdrawableAmount = false,
 }: ChannelStepperProps) {
+  const { tokenSymbol, tokenDecimals } = useToken();
   // Fetch user's deposit amount (only needed for Deposit phase)
   // Updated for new contract: uses getValidatedUserSlotValue with slotIndex 0
   const { data: depositAmount } = useBridgeCoreRead({
@@ -114,10 +116,9 @@ export function ChannelStepper({
   // If state is 0 but hasWithdrawableAmount, show as state 4 (Withdraw)
   const currentStepIndex = currentState === 0 && hasWithdrawableAmount ? 4 : currentState;
 
-  // Format deposit amount
   const formattedDeposit =
     depositAmount !== undefined
-      ? formatUnits(depositAmount as bigint, 18)
+      ? formatUnits(depositAmount as bigint, tokenDecimals)
       : null;
 
   // Get current step for description
@@ -208,7 +209,7 @@ export function ChannelStepper({
               style={{ fontSize: 14 }}
             >
               {hasDeposited
-                ? `Your Deposit: ${formattedDeposit} TON`
+                ? `Your Deposit: ${formattedDeposit} ${tokenSymbol}`
                 : "⚠ You have not deposited yet"}
             </p>
           )}

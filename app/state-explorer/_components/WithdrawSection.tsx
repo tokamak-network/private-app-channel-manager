@@ -9,12 +9,14 @@
 
 import { Button, Card, CardContent } from "@tokamak/ui";
 import { useWithdraw } from "../withdraw/_hooks";
+import { useToken } from "../_context";
 
 interface WithdrawSectionProps {
   channelId: string;
 }
 
 export function WithdrawSection({ channelId }: WithdrawSectionProps) {
+  const { tokenSymbol } = useToken();
   const {
     handleWithdraw,
     isWithdrawing,
@@ -24,7 +26,6 @@ export function WithdrawSection({ channelId }: WithdrawSectionProps) {
 
   // TODO: Get from contract
   const withdrawableAmount = "10.5";
-  const tokenSymbol = "TON";
 
   return (
     <Card className="max-w-2xl">

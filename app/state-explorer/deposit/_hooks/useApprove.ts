@@ -18,12 +18,13 @@ import { useBridgeDepositManagerAddress } from "@/hooks/contract";
 interface UseApproveParams {
   tokenAddress: `0x${string}`;
   depositAmount: string;
+  tokenDecimals: number;
 }
 
 /**
  * Hook for managing ERC20 token approval for deposits
  */
-export function useApprove({ tokenAddress, depositAmount }: UseApproveParams) {
+export function useApprove({ tokenAddress, depositAmount, tokenDecimals }: UseApproveParams) {
   const { address } = useAccount();
   const depositManagerAddress = useBridgeDepositManagerAddress();
 
@@ -33,11 +34,11 @@ export function useApprove({ tokenAddress, depositAmount }: UseApproveParams) {
       return BigInt(0);
     }
     try {
-      return parseUnits(depositAmount, 18); // TON has 18 decimals
+      return parseUnits(depositAmount, tokenDecimals);
     } catch {
       return BigInt(0);
     }
-  }, [depositAmount]);
+  }, [depositAmount, tokenDecimals]);
 
   // Check token balance
   const {

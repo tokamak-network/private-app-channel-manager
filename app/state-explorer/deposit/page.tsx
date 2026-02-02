@@ -13,7 +13,8 @@ import { useChannelFlowStore } from "@/stores/useChannelFlowStore";
 import { useApprove, useIntegratedDeposit, type DepositStep } from "./_hooks";
 import { useChannelInfo } from "@/hooks/useChannelInfo";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
-import { FIXED_TARGET_CONTRACT, getTokenByAddress, SUPPORTED_TOKENS } from "@tokamak/config";
+import { FIXED_TARGET_CONTRACT } from "@tokamak/config";
+import { useToken } from "../_context";
 import { formatUnits } from "viem";
 import { Copy, Info, CheckCircle2, Loader2, HelpCircle } from "lucide-react";
 import { formatWithCommas } from "@/lib/utils/format";
@@ -24,20 +25,14 @@ function DepositPage() {
   const { currentChannelId } = useChannelFlowStore();
   const [depositAmount, setDepositAmount] = useState("");
 
-  // Get channel info to get target token address and decimals
+  // Get token info from context
+  const { tokenSymbol, tokenDecimals, tokenAddress: contextTokenAddress, isLoading: isTokenLoading } = useToken();
+  
+  // Get channel info for other channel data
   const channelInfo = useChannelInfo(
     currentChannelId ? (currentChannelId as `0x${string}`) : null
   );
-  const tokenAddress = channelInfo?.targetContract || FIXED_TARGET_CONTRACT;
-  
-  // Get token info from address
-  const tokenInfo = useMemo(() => {
-    if (!tokenAddress) return SUPPORTED_TOKENS.TON;
-    return getTokenByAddress(tokenAddress) || SUPPORTED_TOKENS.TON;
-  }, [tokenAddress]);
-  
-  const tokenDecimals = tokenInfo.decimals;
-  const tokenSymbol = tokenInfo.symbol;
+  const tokenAddress = (contextTokenAddress || channelInfo?.targetContract || FIXED_TARGET_CONTRACT) as `0x${string}`;
 
   // Fetch user's token balance
   const { balance: userTokenBalance } = useTokenBalance({
@@ -69,6 +64,7 @@ function DepositPage() {
   } = useApprove({
     tokenAddress: tokenAddress as `0x${string}`,
     depositAmount,
+    tokenDecimals,
   });
 
   // Format allowance for display
@@ -162,6 +158,17 @@ function DepositPage() {
         return "";
     }
   };
+
+  if (isTokenLoading) {
+    return (
+      <div className="font-mono flex items-center justify-center" style={{ width: 544, minHeight: 200 }}>
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-[#2A72E5] animate-spin" />
+          <span className="text-[#666666]">Loading channel info...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="font-mono" style={{ width: 544 }}>

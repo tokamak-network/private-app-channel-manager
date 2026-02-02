@@ -23,8 +23,10 @@ import { ProofGenerationModal, type ProofGenerationStep } from "./_components/Pr
 import { Button, AmountInput } from "@/components/ui";
 import { useBridgeCoreRead } from "@/hooks/contract";
 import { useChannelUserBalance } from "@/hooks/useChannelUserBalance";
+import { useToken } from "../_context";
 
 function TransactionPage() {
+  const { tokenSymbol, tokenDecimals } = useToken();
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { currentChannelId } = useChannelFlowStore();
@@ -382,9 +384,8 @@ function TransactionPage() {
   const hasRecipient = Boolean(recipient && recipient.trim() !== "");
   const hasAmount = Boolean(tokenAmount && parseFloat(tokenAmount) > 0);
   
-  // Parse entered amount to bigint for comparison
   const parsedAmount = tokenAmount && parseFloat(tokenAmount) > 0
-    ? parseUnits(tokenAmount, 18)
+    ? parseUnits(tokenAmount, tokenDecimals)
     : BigInt(0);
   
   // Check if amount exceeds balance
@@ -461,7 +462,7 @@ function TransactionPage() {
           value={tokenAmount}
           onChange={setTokenAmount}
           balance={userBalanceFormatted}
-          tokenSymbol="TON"
+          tokenSymbol={tokenSymbol}
           onMaxClick={() => setTokenAmount(userBalanceFormatted)}
           error={exceedsBalance}
           testId="transfer-amount-input"
@@ -534,7 +535,7 @@ function TransactionPage() {
           channelId={currentChannelId}
           recipient={recipient || ""}
           amount={tokenAmount}
-          tokenSymbol="TON"
+          tokenSymbol={tokenSymbol}
           currentStep={currentProofStep}
           onStepChange={setCurrentProofStep}
           onDownload={generatedProofBlob ? handleDownloadProof : undefined}

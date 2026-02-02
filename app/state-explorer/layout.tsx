@@ -9,7 +9,7 @@
 
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useChannelFlowStore } from "@/stores/useChannelFlowStore";
 import { AppLayout } from "@/components/AppLayout";
 import { formatAddress } from "@/lib/utils/format";
@@ -21,6 +21,8 @@ import { useWithdrawableAmount } from "@/hooks/useWithdrawableAmount";
 import { Copy, Check } from "lucide-react";
 import { ChannelStepper } from "./_components/ChannelStepper";
 import { SecurityBanner } from "@/components/SecurityBanner";
+import { TokenProvider } from "./_context";
+import { getTokenByAddress, SUPPORTED_TOKENS } from "@tokamak/config";
 
 // ChannelState enum from contract: 0=None, 1=Initialized, 2=Open, 3=Closing, 4=Closed
 type ContractChannelState = 0 | 1 | 2 | 3 | 4;
@@ -98,6 +100,12 @@ export default function StateExplorerLayout({
     targetContractFromContract !== "0x0000000000000000000000000000000000000000"
       ? (targetContractFromContract as string)
       : targetContractFromApi;
+
+  // Get token info from targetContract
+  const tokenInfo = useMemo(() => {
+    if (!targetContract) return SUPPORTED_TOKENS.TON;
+    return getTokenByAddress(targetContract) ?? SUPPORTED_TOKENS.TON;
+  }, [targetContract]);
 
   // Get withdrawable amount for current user using the updated hook
   // (uses getValidatedUserSlotValue + getBalanceSlotIndex internally)
@@ -264,8 +272,8 @@ export default function StateExplorerLayout({
                 {/* Participant Deposits - Collapsible, collapsed by default */}
                 <ParticipantDeposits
                   channelId={channelId}
-                  tokenSymbol="TON"
-                  tokenDecimals={18}
+                  tokenSymbol={tokenInfo.symbol}
+                  tokenDecimals={tokenInfo.decimals}
                   collapsible={true}
                   defaultExpanded={false}
                   showLeaderCheck={false}
@@ -278,7 +286,9 @@ export default function StateExplorerLayout({
         )}
 
         {/* Page Content */}
-        <div>{children}</div>
+        <TokenProvider targetContract={targetContract} isLoading={!targetContract}>
+          <div>{children}</div>
+        </TokenProvider>
       </div>
 
       {/* Initialize State Confirm Modal */}

@@ -12,6 +12,7 @@ import { X, Loader2, CheckCircle2, Copy, Circle } from "lucide-react";
 import { Button } from "@/components/ui";
 import { ParticipantDeposits } from "./ParticipantDeposits";
 import type { InitializeStateStep } from "../_hooks/useInitializeState";
+import { useToken } from "../_context";
 
 // Step definitions for progress display
 const TRANSACTION_STEPS = [
@@ -41,6 +42,7 @@ export function InitializeStateConfirmModal({
   onClose,
   currentStep = "idle",
 }: InitializeStateConfirmModalProps) {
+  const { tokenSymbol, tokenDecimals } = useToken();
   const [modalState, setModalState] = useState<ModalState>("confirm");
   const [copiedChannelId, setCopiedChannelId] = useState(false);
   const [copiedTxHash, setCopiedTxHash] = useState(false);
@@ -171,8 +173,8 @@ export function InitializeStateConfirmModal({
             <div className="w-full pt-2 border-t border-[#EEEEEE]">
               <ParticipantDeposits
                 channelId={channelId}
-                tokenSymbol="TON"
-                tokenDecimals={18}
+                tokenSymbol={tokenSymbol}
+                tokenDecimals={tokenDecimals}
                 collapsible={false}
                 showLeaderCheck={true}
                 compact={true}

@@ -27,8 +27,9 @@ import {
 import { generateClientSideProof } from "@/lib/clientProofGeneration";
 import JSZip from "jszip";
 import { CloseChannelConfirmModal, type CloseChannelModalStep } from "../close-channel/_components/CloseChannelConfirmModal";
+import { useToken } from "../_context";
 
-// Token symbol images
+// TODO: Add dynamic token icons based on tokenSymbol
 import TONSymbol from "@/assets/symbols/TON.svg";
 
 interface StateSnapshot {
@@ -41,6 +42,7 @@ interface StateSnapshot {
 }
 
 function State3Page() {
+  const { tokenSymbol, tokenDecimals } = useToken();
   const { address, isConnected } = useAccount();
   const config = useConfig();
   const bridgeCoreAddress = useBridgeCoreAddress();
@@ -275,8 +277,7 @@ function State3Page() {
     loadUserBalance();
   }, [currentChannelId, address, isConnected, config, bridgeCoreAddress, bridgeCoreAbi]);
 
-  // Format user balance (assuming 18 decimals for ERC20 tokens)
-  const formattedUserBalance = formatUnits(userBalanceFromSnapshot, 18);
+  const formattedUserBalance = formatUnits(userBalanceFromSnapshot, tokenDecimals);
 
   // Hook for verifying final balances
   const {
@@ -1057,10 +1058,8 @@ function State3Page() {
     // Note: Don't set isProcessing to false here - it will be set when isTransactionSuccess becomes true
   };
 
-  // Token balance from latest verified proof's state_snapshot
-  // Currently channels support single token (targetContract)
   const tokenInfo = channelTargetContract
-    ? { symbol: "TON", amount: formattedUserBalance, isLoading: isLoadingBalance }
+    ? { symbol: tokenSymbol, amount: formattedUserBalance, isLoading: isLoadingBalance }
     : null;
 
   return (
