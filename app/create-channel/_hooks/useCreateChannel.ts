@@ -73,10 +73,13 @@ export function useCreateChannel({
   // Get ABI for decoding
   const abi = useBridgeCoreAbi();
 
-  // Debug: Log writeContract state changes
   useEffect(() => {
-    console.log("📊 writeContract state:", { isWriting, writeError, writeTxHash });
+    console.log("📊 writeContract state:", { isWriting, writeError: writeError?.message, writeTxHash });
   }, [isWriting, writeError, writeTxHash]);
+
+  useEffect(() => {
+    console.log("📊 waitForReceipt state:", { isWaiting, isSuccess, waitError: waitError?.message, hasReceipt: !!receipt });
+  }, [isWaiting, isSuccess, waitError, receipt]);
 
   // Update states based on contract hooks
   useEffect(() => {
@@ -196,6 +199,16 @@ export function useCreateChannel({
           /^0x[a-fA-F0-9]{40}$/.test(p.address)
       );
 
+      console.log("[useCreateChannel] Preparing to save channel to database:", {
+        channelIdStr,
+        txHash: receipt.transactionHash,
+        primaryTargetContract,
+        validParticipants: validParticipants.map((p) => p.address),
+        blockNumber: receipt.blockNumber.toString(),
+        appType,
+        selectedTokens,
+      });
+
       try {
         await saveChannelToDatabase({
           channelId: channelIdStr,
@@ -204,11 +217,11 @@ export function useCreateChannel({
           participants: validParticipants.map((p) => p.address),
           blockNumber: receipt.blockNumber.toString(),
           appType,
-          selectedTokens, // Save selected tokens for multi-token support
+          selectedTokens,
         });
+        console.log("[useCreateChannel] Channel saved to database successfully");
       } catch (dbError) {
-        console.error("Error saving channel to database:", dbError);
-        // Don't throw - channel is created on-chain, DB save is secondary
+        console.error("[useCreateChannel] Error saving channel to database:", dbError);
       }
 
       // Set created channel ID and transaction hash
@@ -230,10 +243,17 @@ export function useCreateChannel({
   }, [receipt, isSuccess, abi, participants, appType, selectedTokens, primaryTargetContract]);
 
   useEffect(() => {
+    console.log("[useCreateChannel] Receipt effect triggered:", {
+      hasReceipt: !!receipt,
+      isSuccess,
+      isWaiting,
+      waitError: waitError?.message,
+    });
     if (receipt && isSuccess) {
+      console.log("[useCreateChannel] Calling handleChannelCreated with receipt:", receipt.transactionHash);
       handleChannelCreated();
     }
-  }, [receipt, isSuccess, handleChannelCreated]);
+  }, [receipt, isSuccess, handleChannelCreated, isWaiting, waitError]);
 
   // Create channel function
   const createChannel = useCallback(async () => {

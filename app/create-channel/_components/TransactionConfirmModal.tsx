@@ -55,18 +55,15 @@ export function TransactionConfirmModal({
     return TRANSACTION_STEPS.findIndex((s) => s.key === currentStep);
   };
 
-  // Update modal state based on props
   useEffect(() => {
-    if (currentStep === "completed" || txHash) {
+    if (currentStep === "completed") {
       setModalState("completed");
     } else if (currentStep === "signing" || currentStep === "confirming" || isCreating || isConfirming) {
       setModalState("processing");
     } else if (currentStep === "error") {
-      // On error, go back to confirm state
       setModalState("confirm");
     }
-    // Note: Don't include modalState in dependencies to avoid infinite loop
-  }, [isCreating, isConfirming, txHash, currentStep]);
+  }, [isCreating, isConfirming, currentStep]);
 
   const handleConfirm = async () => {
     setModalState("processing");

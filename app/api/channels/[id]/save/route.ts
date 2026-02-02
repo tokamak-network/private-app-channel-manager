@@ -16,10 +16,20 @@ interface RouteParams {
 export async function POST(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
-    // saveChannel automatically normalizes channelId to lowercase
     console.log('[API] POST /api/channels/:id/save - Channel ID:', id);
     console.log('[API] POST /api/channels/:id/save - Will be normalized to:', id.toLowerCase());
-    const body = await request.json();
+    
+    let body;
+    try {
+      body = await request.json();
+      console.log('[API] POST /api/channels/:id/save - Request body:', JSON.stringify(body, null, 2));
+    } catch (parseError) {
+      console.error('[API] POST /api/channels/:id/save - Failed to parse request body:', parseError);
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
 
     const {
       txHash,
@@ -41,18 +51,21 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    // Save channel information
-    await saveChannel(id, {
+    const channelData = {
       channelId: id,
-      status: "pending", // Pending until initialization
+      status: "pending" as const,
       targetContract,
       participants: Array.isArray(participants) ? participants : [participants],
       openChannelTxHash: txHash,
       blockNumber: blockNumber?.toString(),
       blockTimestamp: blockTimestamp?.toString(),
-      createdAt: Date.now(), // Unix timestamp (milliseconds) - avoids timezone issues
-      appType: appType || null, // App type for future extensibility (e.g., "ERC20", "NFT", etc.)
-    });
+      createdAt: Date.now(),
+      appType: appType || null,
+    };
+    console.log('[API] POST /api/channels/:id/save - Saving channel data:', JSON.stringify(channelData, null, 2));
+    
+    await saveChannel(id, channelData);
+    console.log('[API] POST /api/channels/:id/save - Channel saved successfully');
 
     return NextResponse.json({
       success: true,

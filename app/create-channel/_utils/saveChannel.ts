@@ -32,28 +32,49 @@ export async function saveChannelToDatabase(
 ): Promise<void> {
   const { channelId, txHash, targetContract, participants, blockNumber, blockTimestamp, appType, selectedTokens } = params;
 
-  const response = await fetch(`/api/channels/${channelId}/save`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      txHash,
-      targetContract,
-      participants,
-      blockNumber,
-      blockTimestamp,
-      appType,
-      selectedTokens, // Save selected tokens for multi-token support
-    }),
+  console.log("[saveChannelToDatabase] Starting save for channel:", channelId);
+  console.log("[saveChannelToDatabase] Params:", {
+    channelId,
+    txHash,
+    targetContract,
+    participants,
+    blockNumber,
+    appType,
+    selectedTokens,
   });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    console.error("Failed to save channel to database:", errorData);
-    // Don't throw - channel is created on-chain, DB save is secondary
-    throw new Error(errorData.error || "Failed to save channel to database");
-  }
+  const apiUrl = `/api/channels/${channelId}/save`;
+  console.log("[saveChannelToDatabase] API URL:", apiUrl);
 
-  console.log("Channel information saved to database:", channelId);
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        txHash,
+        targetContract,
+        participants,
+        blockNumber,
+        blockTimestamp,
+        appType,
+        selectedTokens,
+      }),
+    });
+
+    console.log("[saveChannelToDatabase] Response status:", response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("[saveChannelToDatabase] Failed:", errorData);
+      throw new Error(errorData.error || "Failed to save channel to database");
+    }
+
+    const result = await response.json();
+    console.log("[saveChannelToDatabase] Success:", result);
+  } catch (error) {
+    console.error("[saveChannelToDatabase] Exception:", error);
+    throw error;
+  }
 }
