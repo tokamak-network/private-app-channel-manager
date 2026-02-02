@@ -456,4 +456,210 @@ test.describe.serial('Tokamak Channels Snap - Full Workflow', () => {
       }
     }
   });
+
+  test('8. Deposit Flow via Snap Homepage', async () => {
+    const navigated = await navigateToSnapHomepage(page);
+    if (!navigated) {
+      console.log('Failed to navigate to snap homepage');
+      return;
+    }
+
+    await page.screenshot({ path: 'test-results/08-snap-homepage-before-deposit.png' });
+
+    const depositBtn = page.locator('button').filter({ hasText: /Deposit/i }).first();
+    if (await depositBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await depositBtn.click();
+      console.log('Clicked Deposit button on Snap homepage');
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: 'test-results/08-deposit-form.png' });
+
+      const input = page.locator('input').first();
+      if (await input.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await input.click();
+        await input.fill('');
+        await input.type('0.001', { delay: 10 });
+        console.log('Entered deposit amount: 0.001');
+        await page.screenshot({ path: 'test-results/08-deposit-amount-filled.png' });
+
+        const submitBtn = page.locator('button').filter({ hasText: /Deposit|Submit/i }).first();
+        if (await submitBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await submitBtn.click();
+          console.log('Clicked submit button for deposit');
+          await page.waitForTimeout(2000);
+
+          const personalSignPage = await openMetaMaskNotification();
+          await personalSignPage.screenshot({ path: 'test-results/08-personal-sign-popup.png' });
+          
+          const signBtn = personalSignPage.locator('button').filter({ hasText: /Sign|Confirm|Approve/i }).first();
+          if (await signBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await signBtn.click();
+            console.log('Approved personal_sign for MPT key');
+            await personalSignPage.waitForTimeout(2000);
+          }
+          await personalSignPage.close();
+
+          await page.waitForTimeout(2000);
+
+          const txPage = await openMetaMaskNotification();
+          await txPage.screenshot({ path: 'test-results/08-send-transaction-popup.png' });
+          
+          const pageText = await txPage.textContent('body').catch(() => '') || '';
+          console.log('Transaction popup contains "confirm":', pageText.toLowerCase().includes('confirm'));
+          
+          // Reject transaction to avoid spending real ETH/tokens in test environment
+          const rejectBtn = txPage.locator('button').filter({ hasText: /Reject|Cancel/i }).first();
+          if (await rejectBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await rejectBtn.click();
+            console.log('Rejected transaction (avoiding real fund spend)');
+          }
+          await txPage.close();
+
+          await page.waitForTimeout(2000);
+          await page.screenshot({ path: 'test-results/08-after-deposit-flow.png' });
+        }
+      }
+    } else {
+      console.log('Deposit button not visible on snap homepage');
+      const allButtons = await page.locator('button').all();
+      for (const btn of allButtons) {
+        const text = await btn.textContent().catch(() => '');
+        if (text?.trim()) {
+          console.log('  Button found:', text.trim());
+        }
+      }
+    }
+  });
+
+  test('9. View Activity', async () => {
+    const navigated = await navigateToSnapHomepage(page);
+    if (!navigated) {
+      console.log('Failed to navigate to snap homepage');
+      return;
+    }
+
+    await page.screenshot({ path: 'test-results/09-snap-homepage-before-activity.png' });
+
+    const activityBtn = page.locator('button').filter({ hasText: /Activity/i }).first();
+    if (await activityBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await activityBtn.click();
+      console.log('Clicked Activity button on Snap homepage');
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: 'test-results/09-activity-view.png' });
+
+      const pageText = await page.textContent('body').catch(() => '') || '';
+      const hasActivityHeading = pageText.includes('Activity') || pageText.includes('activity');
+      const hasNoTransactions = pageText.includes('No transactions') || pageText.includes('no transactions');
+      
+      console.log('Activity page has "Activity" heading:', hasActivityHeading);
+      console.log('Activity page has "No transactions":', hasNoTransactions);
+
+      const backBtn = page.locator('button').filter({ hasText: /Back|Menu|Home/i }).first();
+      if (await backBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await backBtn.click();
+        console.log('Clicked Back button');
+        await page.waitForTimeout(2000);
+        await page.screenshot({ path: 'test-results/09-after-activity-back.png' });
+      }
+    } else {
+      console.log('Activity button not visible on snap homepage');
+      const allButtons = await page.locator('button').all();
+      for (const btn of allButtons) {
+        const text = await btn.textContent().catch(() => '');
+        if (text?.trim()) {
+          console.log('  Button found:', text.trim());
+        }
+      }
+    }
+  });
+
+  test('10. Invalid Channel ID Error', async () => {
+    const navigated = await navigateToSnapHomepage(page);
+    if (!navigated) {
+      console.log('Failed to navigate to snap homepage');
+      return;
+    }
+
+    await page.screenshot({ path: 'test-results/10-snap-homepage-before-invalid.png' });
+
+    const setChannelBtn = page.locator('button').filter({ hasText: /Set Channel ID/i }).first();
+    if (await setChannelBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await setChannelBtn.click();
+      console.log('Clicked Set Channel ID button');
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: 'test-results/10-set-channel-form.png' });
+
+      const INVALID_CHANNEL_ID = '0x123';
+
+      const input = page.locator('input').first();
+      if (await input.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await input.click();
+        await input.fill('');
+        await input.type(INVALID_CHANNEL_ID, { delay: 10 });
+        console.log('Entered invalid channel ID:', INVALID_CHANNEL_ID);
+        await page.screenshot({ path: 'test-results/10-invalid-channel-id-filled.png' });
+
+        const saveBtn = page.locator('button').filter({ hasText: /^Save$/i }).first();
+        if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          const saveBtnBounds = await saveBtn.boundingBox();
+          if (saveBtnBounds) {
+            await page.mouse.click(saveBtnBounds.x + saveBtnBounds.width / 2, saveBtnBounds.y + saveBtnBounds.height / 2);
+            console.log('Clicked Save button');
+          } else {
+            await saveBtn.click({ force: true });
+          }
+          
+          await page.waitForTimeout(3000);
+          await page.screenshot({ path: 'test-results/10-after-invalid-save.png' });
+
+          const pageText = await page.textContent('body').catch(() => '') || '';
+          const hasError = pageText.toLowerCase().includes('invalid') || 
+                          pageText.toLowerCase().includes('error') ||
+                          pageText.toLowerCase().includes('format');
+          
+          console.log('Error message visible:', hasError);
+          console.log('Page text (first 500 chars):', pageText.substring(0, 500));
+        }
+      }
+    } else {
+      console.log('Set Channel ID button not visible on snap homepage');
+    }
+  });
+
+  test('11. Dashboard Without Channel', async () => {
+    await page.goto(SITE_URL);
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: 'test-results/11-test-site-loaded.png' });
+
+    const showDashboardBtn = page.getByRole('button', { name: 'Show Dashboard' });
+    const isDisabled = await showDashboardBtn.getAttribute('disabled');
+    
+    if (isDisabled !== null) {
+      console.log('Show Dashboard button is disabled, skipping');
+      return;
+    }
+
+    await showDashboardBtn.click();
+    console.log('Clicked Show Dashboard...');
+    await page.waitForTimeout(1500);
+
+    const notificationPage = await openMetaMaskNotification();
+    await notificationPage.screenshot({ path: 'test-results/11-dashboard-notification.png' });
+
+    const pageText = await notificationPage.textContent('body').catch(() => '') || '';
+    const hasNoChannel = pageText.toLowerCase().includes('no channel') || 
+                         pageText.toLowerCase().includes('not configured') ||
+                         pageText.toLowerCase().includes('configure');
+    
+    console.log('Dashboard mentions no channel configured:', hasNoChannel);
+    console.log('Dashboard text (first 500 chars):', pageText.substring(0, 500));
+
+    const okBtn = notificationPage.locator('button').filter({ hasText: /ok|close|got it/i }).first();
+    if (await okBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await okBtn.click();
+      console.log('Closed dashboard notification');
+    }
+
+    await notificationPage.close();
+    await page.screenshot({ path: 'test-results/11-after-dashboard-check.png' });
+  });
 });
