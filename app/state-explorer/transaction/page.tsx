@@ -66,6 +66,7 @@ function TransactionPage() {
   const { balance: userBalance, balanceFormatted: userBalanceFormatted } = useChannelUserBalance({
     channelId: currentChannelId || null,
     mptKey: mptKeyHex,
+    decimals: tokenDecimals,
   });
 
   // Form state
