@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAccount, useConfig } from "wagmi";
 import { useBridgeCoreRead, readBridgeCoreContract } from "@/hooks/contract";
 import { useBridgeCoreAddress, useBridgeCoreAbi } from "@/hooks/contract";
+import { useBalanceSlotIndex } from "@/hooks/useBalanceSlotIndex";
 import JSZip from "jszip";
 
 export interface ChannelBalanceResult {
@@ -40,10 +41,12 @@ export interface ChannelBalanceResult {
 
 interface UseChannelBalanceParams {
   channelId: string | null;
+  tokenAddress?: string | null;
 }
 
 export function useChannelBalance({
   channelId,
+  tokenAddress,
 }: UseChannelBalanceParams): ChannelBalanceResult {
   const { address, isConnected } = useAccount();
   const config = useConfig();
@@ -60,30 +63,30 @@ export function useChannelBalance({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get user's MPT key from on-chain
-  // Updated for new contract: requires slotIndex parameter (using 0 for balance slot)
+  const { slotIndex, isLoading: isLoadingSlotIndex } = useBalanceSlotIndex({
+    targetContract: tokenAddress,
+  });
+
   const { data: mptKeyData, isLoading: isLoadingMptKey } = useBridgeCoreRead({
     functionName: "getL2MptKey",
     args:
-      channelId && address
-        ? [channelId as `0x${string}`, address as `0x${string}`, 0]
+      channelId && address && slotIndex !== undefined
+        ? [channelId as `0x${string}`, address as `0x${string}`, slotIndex]
         : undefined,
     query: {
-      enabled: !!channelId && !!address && isConnected,
+      enabled: !!channelId && !!address && isConnected && slotIndex !== undefined,
     },
   });
 
-  // Get initial deposit from on-chain
-  // Updated for new contract: uses getValidatedUserSlotValue with slotIndex 0
   const { data: initialDepositData, isLoading: isLoadingDeposit } =
     useBridgeCoreRead({
       functionName: "getValidatedUserSlotValue",
       args:
-        channelId && address
-          ? [channelId as `0x${string}`, address as `0x${string}`, 0]
+        channelId && address && slotIndex !== undefined
+          ? [channelId as `0x${string}`, address as `0x${string}`, slotIndex]
           : undefined,
       query: {
-        enabled: !!channelId && !!address && isConnected,
+        enabled: !!channelId && !!address && isConnected && slotIndex !== undefined,
       },
     });
 
@@ -310,7 +313,7 @@ export function useChannelBalance({
     mptKey,
     source,
     latestSequenceNumber,
-    isLoading: isLoading || isLoadingMptKey || isLoadingDeposit,
+    isLoading: isLoading || isLoadingMptKey || isLoadingDeposit || isLoadingSlotIndex,
     error,
     refetch,
   };

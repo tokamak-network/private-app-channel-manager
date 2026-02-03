@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import { useBridgeCoreRead } from "@/hooks/contract";
+import { useBalanceSlotIndex } from "@/hooks/useBalanceSlotIndex";
 import { formatUnits } from "viem";
 import JSZip from "jszip";
 
@@ -50,12 +51,15 @@ interface UseTransactionHistoryParams {
   decimals?: number;
   /** Token symbol (default: "TON") */
   tokenSymbol?: string;
+  /** Token address for slotIndex lookup */
+  tokenAddress?: string | null;
 }
 
 export function useTransactionHistory({
   channelId,
   decimals = 18,
   tokenSymbol = "TON",
+  tokenAddress,
 }: UseTransactionHistoryParams): TransactionHistoryResult {
   const { address, isConnected } = useAccount();
 
@@ -65,30 +69,30 @@ export function useTransactionHistory({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get user's MPT key from on-chain
-  // Updated for new contract: requires slotIndex parameter (using 0 for balance slot)
+  const { slotIndex, isLoading: isLoadingSlotIndex } = useBalanceSlotIndex({
+    targetContract: tokenAddress,
+  });
+
   const { data: mptKeyData, isLoading: isLoadingMptKey } = useBridgeCoreRead({
     functionName: "getL2MptKey",
     args:
-      channelId && address
-        ? [channelId as `0x${string}`, address as `0x${string}`, 0]
+      channelId && address && slotIndex !== undefined
+        ? [channelId as `0x${string}`, address as `0x${string}`, slotIndex]
         : undefined,
     query: {
-      enabled: !!channelId && !!address && isConnected,
+      enabled: !!channelId && !!address && isConnected && slotIndex !== undefined,
     },
   });
 
-  // Get initial deposit from on-chain
-  // Updated for new contract: uses getValidatedUserSlotValue with slotIndex 0
   const { data: initialDepositData, isLoading: isLoadingDeposit } =
     useBridgeCoreRead({
       functionName: "getValidatedUserSlotValue",
       args:
-        channelId && address
-          ? [channelId as `0x${string}`, address as `0x${string}`, 0]
+        channelId && address && slotIndex !== undefined
+          ? [channelId as `0x${string}`, address as `0x${string}`, slotIndex]
           : undefined,
       query: {
-        enabled: !!channelId && !!address && isConnected,
+        enabled: !!channelId && !!address && isConnected && slotIndex !== undefined,
       },
     });
 

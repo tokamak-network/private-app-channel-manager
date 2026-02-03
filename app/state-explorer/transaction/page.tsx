@@ -23,6 +23,7 @@ import { ProofGenerationModal, type ProofGenerationStep } from "./_components/Pr
 import { Button, AmountInput } from "@/components/ui";
 import { useBridgeCoreRead } from "@/hooks/contract";
 import { useChannelUserBalance } from "@/hooks/useChannelUserBalance";
+import { useBalanceSlotIndex } from "@/hooks/useBalanceSlotIndex";
 import { useToken } from "../_context";
 
 function TransactionPage() {
@@ -46,14 +47,15 @@ function TransactionPage() {
       ? String(channelLeader).toLowerCase() === String(address).toLowerCase()
       : false;
 
-  // Get user's registered MPT key from on-chain (already deposited/registered)
+  const { slotIndex } = useBalanceSlotIndex({ targetContract: tokenAddress });
+
   const { data: registeredMptKey } = useBridgeCoreRead({
     functionName: "getL2MptKey",
-    args: currentChannelId && address
-      ? [currentChannelId as `0x${string}`, address]
+    args: currentChannelId && address && slotIndex !== undefined
+      ? [currentChannelId as `0x${string}`, address, slotIndex]
       : undefined,
     query: {
-      enabled: !!currentChannelId && !!address,
+      enabled: !!currentChannelId && !!address && slotIndex !== undefined,
     },
   });
 

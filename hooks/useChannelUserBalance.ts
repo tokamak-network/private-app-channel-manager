@@ -13,7 +13,8 @@ import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import { isValidBytes32 } from "@/lib/channelId";
 import { useBridgeCoreRead } from "@/hooks/contract";
-import { ERC20_TRANSFER } from "@tokamak/config";
+import { useBalanceSlotIndex } from "@/hooks/useBalanceSlotIndex";
+import { getTokenByAddress } from "@tokamak/config";
 import JSZip from "jszip";
 
 interface StateSnapshot {
@@ -61,25 +62,19 @@ export function useChannelUserBalance({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get slot index from token address (TON=0, USDT=1, USDC=2)
-  const slotIndex = (() => {
-    if (!tokenAddress) return 0;
-    const normalizedAddress = tokenAddress.toLowerCase();
-    const entry = Object.entries(ERC20_TRANSFER).find(
-      ([key]) => key.toLowerCase() === normalizedAddress
-    );
-    return entry ? entry[1].slot : 0;
-  })();
+  // Get slot index from contract (TON=0, USDT=1, USDC=2)
+  const { slotIndex, isLoading: isLoadingSlotIndex } = useBalanceSlotIndex({
+    targetContract: tokenAddress,
+  });
 
-  // Fetch initial deposit from on-chain (fallback)
   const { data: initialDeposit, isLoading: isLoadingDeposit } = useBridgeCoreRead({
     functionName: "getValidatedUserSlotValue",
     args:
-      channelId && address && isValidBytes32(channelId)
+      channelId && address && isValidBytes32(channelId) && slotIndex !== undefined
         ? [channelId as `0x${string}`, address, slotIndex]
         : undefined,
     query: {
-      enabled: !!channelId && !!address && isValidBytes32(channelId),
+      enabled: !!channelId && !!address && isValidBytes32(channelId) && slotIndex !== undefined,
     },
   });
 
@@ -267,10 +262,10 @@ export function useChannelUserBalance({
   return {
     balance,
     balanceFormatted,
-    tokenSymbol: "TON",
+    tokenSymbol: tokenAddress ? (getTokenByAddress(tokenAddress)?.symbol ?? "TON") : "TON",
     isFromProof,
     proofNumber,
-    isLoading: isLoading || isLoadingDeposit,
+    isLoading: isLoading || isLoadingDeposit || isLoadingSlotIndex,
     error,
     refetch: fetchBalance,
   };

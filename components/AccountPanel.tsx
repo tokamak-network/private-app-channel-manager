@@ -23,10 +23,13 @@ import { useGenerateMptKey } from "@/hooks/useGenerateMptKey";
 import { useTransactionHistory } from "@/hooks/useTransactionHistory";
 import { useChannelParticipantCheck } from "@/hooks/useChannelParticipantCheck";
 import { useChannelUserBalance } from "@/hooks/useChannelUserBalance";
+import { useBalanceSlotIndex } from "@/hooks/useBalanceSlotIndex";
 import { useConnectedAccounts } from "@/hooks/useConnectedAccounts";
+import { getTokenByAddress } from "@tokamak/config";
 
-// Token symbol images
 import TONSymbol from "@/assets/symbols/TON.svg";
+import USDTSymbol from "@/assets/symbols/USDT.svg";
+import USDCSymbol from "@/assets/symbols/USDC.svg";
 
 interface AccountPanelProps {
   onClose?: () => void;
@@ -117,23 +120,24 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
     fetchTargetContract();
   }, [channelIdInput]);
 
-  // Use common hook for L2 address and MPT key generation
+  const { slotIndex } = useBalanceSlotIndex({ targetContract: channelTargetContract });
+
   const {
     generate,
     isGenerating: isComputing,
     accountInfo,
   } = useGenerateMptKey({
     channelId: channelIdInput || null,
-    slotIndex: 0,
+    slotIndex: slotIndex ?? 0,
   });
 
   const l2Address = accountInfo?.l2Address || null;
   const mptKey = accountInfo?.mptKey || null;
 
-  // Use shared hook for channel balance (from verified proof or initial deposit)
   const {
     balance: channelBalance,
     balanceFormatted,
+    tokenSymbol,
     isFromProof,
     proofNumber,
     isLoading: isLoadingBalance,
@@ -142,6 +146,17 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
     mptKey,
     tokenAddress: channelTargetContract,
   });
+
+  const getTokenSymbolImage = (symbol: string) => {
+    switch (symbol) {
+      case "USDT":
+        return USDTSymbol;
+      case "USDC":
+        return USDCSymbol;
+      default:
+        return TONSymbol;
+    }
+  };
 
   // Determine validation state
   const hasInput = Boolean(channelIdInput && channelIdInput.trim() !== "");
@@ -325,14 +340,16 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
     setIsAccountDropdownOpen(false);
   };
 
-  // Fetch real transaction history from verified proofs (Channel transactions - sent only)
+  const tokenInfo = channelTargetContract ? getTokenByAddress(channelTargetContract) : null;
+
   const {
     transactions: transactionHistory,
     isLoading: isLoadingHistory,
   } = useTransactionHistory({
     channelId: channelIdInput && isValidBytes32(channelIdInput) ? channelIdInput : null,
-    decimals: 18,
-    tokenSymbol: "TON",
+    decimals: tokenInfo?.decimals ?? 18,
+    tokenSymbol: tokenInfo?.symbol ?? "TON",
+    tokenAddress: channelTargetContract,
   });
 
   // Filter to only show "sent" transactions for Channel mode
@@ -680,8 +697,8 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
               >
                 <div className="flex items-center gap-2">
                   <Image
-                    src={TONSymbol}
-                    alt="TON"
+                    src={getTokenSymbolImage(tokenSymbol)}
+                    alt={tokenSymbol}
                     width={24}
                     height={24}
                     className="rounded-full"
@@ -690,7 +707,7 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
                     className="text-[#111111]"
                     style={{ fontSize: 18, lineHeight: "1.3em" }}
                   >
-                    {balanceFormatted}
+                    {balanceFormatted} {tokenSymbol}
                   </span>
                 </div>
                 <span
@@ -818,7 +835,7 @@ export function AccountPanel({ onClose }: AccountPanelProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       <Image
-                        src={TONSymbol}
+                        src={getTokenSymbolImage(tx.token)}
                         alt={tx.token}
                         width={24}
                         height={24}
