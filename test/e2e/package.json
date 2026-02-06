@@ -1,0 +1,9 @@
+{
+  "name": "channel-manager-metamask-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "npx playwright test --config=../../test/e2e/playwright.config.ts",
+    "test:ui": "npx playwright test --config=../../test/e2e/playwright.config.ts --ui"
+  }
+}

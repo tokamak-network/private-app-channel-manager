@@ -21,7 +21,8 @@
     "test:hooks:react": "jest test/hooks/usePreviousStateSnapshot.test.tsx",
     "test:e2e": "bash scripts/check-test-deps.sh && playwright test",
     "test:e2e:ui": "bash scripts/check-test-deps.sh && playwright test --ui",
-    "test:e2e:check": "bash scripts/check-test-deps.sh"
+    "test:e2e:check": "bash scripts/check-test-deps.sh",
+    "test:e2e:metamask": "bash test/e2e/run.sh"
   },
   "dependencies": {
     "@ethereumjs/util": "^10.0.0",
