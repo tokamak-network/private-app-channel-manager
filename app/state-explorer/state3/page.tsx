@@ -219,14 +219,32 @@ function State3Page() {
 
         const stateSnapshot = JSON.parse(stateSnapshotJson) as StateSnapshot;
 
-        // Get user's MPT key
+        // Get balance slot index from target contract
+        let balanceSlotIndex = 0;
+        if (channelTargetContract) {
+          const slotIndexResult = await readContracts(config, {
+            contracts: [
+              {
+                address: bridgeCoreAddress,
+                abi: bridgeCoreAbi,
+                functionName: "getBalanceSlotIndex" as const,
+                args: [channelTargetContract as `0x${string}`],
+              },
+            ],
+          });
+          if (slotIndexResult[0]?.status === "success") {
+            balanceSlotIndex = Number(slotIndexResult[0].result);
+          }
+        }
+
+        // Get user's MPT key using the dynamic balance slot index
         const mptKeyResult = await readContracts(config, {
           contracts: [
             {
               address: bridgeCoreAddress,
               abi: bridgeCoreAbi,
               functionName: "getL2MptKey" as const,
-              args: [currentChannelId as `0x${string}`, address as `0x${string}`],
+              args: [currentChannelId as `0x${string}`, address as `0x${string}`, balanceSlotIndex],
             },
           ],
         });
@@ -275,7 +293,7 @@ function State3Page() {
     };
 
     loadUserBalance();
-  }, [currentChannelId, address, isConnected, config, bridgeCoreAddress, bridgeCoreAbi]);
+  }, [currentChannelId, address, isConnected, config, bridgeCoreAddress, bridgeCoreAbi, channelTargetContract]);
 
   const formattedUserBalance = formatUnits(userBalanceFromSnapshot, tokenDecimals);
 
@@ -556,14 +574,34 @@ function State3Page() {
     }
 
     // Step 2: Add permutation entries for participants
-    // Get MPT keys for each participant
+    // First, get the balance slot index from target contract
+    setStatus("Fetching balance slot index...");
+    let balanceSlotIndex = 0;
+    if (channelTargetContract) {
+      const slotIndexResult = await readContracts(config, {
+        contracts: [
+          {
+            address: bridgeCoreAddress,
+            abi: bridgeCoreAbi,
+            functionName: "getBalanceSlotIndex" as const,
+            args: [channelTargetContract as `0x${string}`],
+          },
+        ],
+      });
+      if (slotIndexResult[0]?.status === "success") {
+        balanceSlotIndex = Number(slotIndexResult[0].result);
+        console.log("[State3Page] Balance slot index from contract:", balanceSlotIndex);
+      }
+    }
+
+    // Get MPT keys for each participant using dynamic balance slot index
     setStatus("Fetching participant MPT keys...");
     const mptKeyContracts = participantsArray.map(
       (participant: `0x${string}`) => ({
         address: bridgeCoreAddress,
         abi: bridgeCoreAbi,
         functionName: "getL2MptKey" as const,
-        args: [currentChannelId as `0x${string}`, participant],
+        args: [currentChannelId as `0x${string}`, participant, balanceSlotIndex],
       })
     );
 

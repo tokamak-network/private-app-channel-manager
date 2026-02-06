@@ -135,13 +135,29 @@ export async function fetchChannelInitialState(
   const storageEntries: Array<{ key: string; value: string }> = [];
 
   if (participants.length > 0) {
+    // Get balance slot index from target contract
+    let balanceSlotIndex = 0;
+    const slotIndexResult = await readContracts(config, {
+      contracts: [
+        {
+          address: bridgeCoreAddress,
+          abi: bridgeCoreAbi,
+          functionName: "getBalanceSlotIndex",
+          args: [targetContract],
+        },
+      ],
+    });
+    if (slotIndexResult[0]?.status === "success") {
+      balanceSlotIndex = Number(slotIndexResult[0].result);
+    }
+
     const participantDataResults = await readContracts(config, {
       contracts: participants.flatMap((participant) => [
         {
           address: bridgeCoreAddress,
           abi: bridgeCoreAbi,
           functionName: "getL2MptKey",
-          args: [BigInt(channelIdNum), participant],
+          args: [BigInt(channelIdNum), participant, balanceSlotIndex],
         },
         {
           address: bridgeCoreAddress,

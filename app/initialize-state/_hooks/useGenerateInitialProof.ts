@@ -183,6 +183,24 @@ export function useGenerateInitialProof({
       const bridgeCoreAddress = getContractAddress("BridgeCore", networkId);
       const bridgeCoreAbi = getContractAbi("BridgeCore");
 
+      // Get balance slot index from target contract
+      let balanceSlotIndex = 0;
+      if (channelTargetContract) {
+        const slotIndexResult = await readContracts(config, {
+          contracts: [
+            {
+              address: bridgeCoreAddress,
+              abi: bridgeCoreAbi,
+              functionName: "getBalanceSlotIndex",
+              args: [channelTargetContract as `0x${string}`],
+            },
+          ],
+        });
+        if (slotIndexResult[0]?.status === "success") {
+          balanceSlotIndex = Number(slotIndexResult[0].result);
+        }
+      }
+
       for (
         let i = 0;
         i < participants.length && storageKeysL2MPT.length < treeSize;
@@ -202,7 +220,7 @@ export function useGenerateInitialProof({
                 address: bridgeCoreAddress,
                 abi: bridgeCoreAbi,
                 functionName: "getL2MptKey",
-                args: [channelIdHex!, participant],
+                args: [channelIdHex!, participant, balanceSlotIndex],
               },
               {
                 address: bridgeCoreAddress,

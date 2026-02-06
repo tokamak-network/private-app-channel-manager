@@ -245,13 +245,31 @@ async function testFetchChannelInitialState() {
       console.log(
         `📡 Step 4: Fetching MPT keys and deposits for ${participants.length} participants...`
       );
+
+      // Get balance slot index from target contract
+      let balanceSlotIndex = 0;
+      const slotIndexResult = await readContracts(config, {
+        contracts: [
+          {
+            address: bridgeCoreAddress,
+            abi: bridgeCoreAbi,
+            functionName: "getBalanceSlotIndex",
+            args: [targetContract],
+          },
+        ],
+      });
+      if (slotIndexResult[0]?.status === "success") {
+        balanceSlotIndex = Number(slotIndexResult[0].result);
+        console.log(`   Balance slot index: ${balanceSlotIndex}`);
+      }
+
       const participantDataResults = await readContracts(config, {
         contracts: participants.flatMap((participant) => [
           {
             address: bridgeCoreAddress,
             abi: bridgeCoreAbi,
             functionName: "getL2MptKey",
-            args: [BigInt(channelIdNum), participant],
+            args: [BigInt(channelIdNum), participant, balanceSlotIndex],
           },
           {
             address: bridgeCoreAddress,

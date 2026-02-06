@@ -245,28 +245,35 @@ export default function CloseChannelPage() {
     }
   }, [selectedProof, submitProofs]);
 
-  // Phase 2: Build permutation array
+  // Phase 2: Build permutation array and final balances
   const buildPermutation = useCallback(async () => {
     if (!channelParticipants || !finalStateRoot || !channelTargetContract) {
       throw new Error("Missing channel data");
     }
 
-    setFinalProofStatus("Fetching final state snapshot...");
+    setFinalProofStatus("Fetching final state snapshot from verified proof...");
 
-    // Get final state snapshot from API
+    // Get the latest state snapshot from verified proofs
     const response = await fetch(
-      `/api/get-contract-state-for-proof?channelId=${channelId}&stateRoot=${finalStateRoot}`
+      `/api/get-latest-state-snapshot?channelId=${channelId}`
     );
     if (!response.ok) {
-      throw new Error("Failed to fetch final state snapshot");
+      throw new Error("Failed to fetch latest state snapshot");
     }
-    const snapshotData = await response.json();
+    const snapshotResponse = await response.json();
 
-    if (!snapshotData.success || !snapshotData.data) {
-      throw new Error("Invalid state snapshot data");
+    if (!snapshotResponse.success || !snapshotResponse.snapshot) {
+      throw new Error("No verified state snapshot found for this channel");
     }
 
-    setFinalProofStatus("Calculating permutation...");
+    const snapshot = snapshotResponse.snapshot;
+    console.log("[buildPermutation] State snapshot:", {
+      stateRoot: snapshot.stateRoot,
+      storageEntriesCount: snapshot.storageEntries?.length || 0,
+      registeredKeysCount: snapshot.registeredKeys?.length || 0,
+    });
+
+    setFinalProofStatus("Calculating permutation and final balances...");
 
     // Get registered keys from contract (already fetched via hook)
     if (!preAllocatedKeys || !Array.isArray(preAllocatedKeys)) {
@@ -274,33 +281,42 @@ export default function CloseChannelPage() {
     }
     const registeredKeys: string[] = preAllocatedKeys as string[];
 
-    // Normalize storage key function
-    const normalizeStorageKey = (key: string): string => {
-      return key.toLowerCase().startsWith("0x")
-        ? key.toLowerCase()
-        : `0x${key.toLowerCase()}`;
+    // Normalize storage key to hex format for comparison
+    const normalizeKey = (key: string | bigint): string => {
+      if (typeof key === "bigint") {
+        return `0x${key.toString(16).padStart(64, "0")}`.toLowerCase();
+      }
+      const keyStr = key.toString();
+      if (keyStr.startsWith("0x")) {
+        return keyStr.toLowerCase();
+      }
+      // If it's a decimal string, convert to hex
+      try {
+        const bigIntKey = BigInt(keyStr);
+        return `0x${bigIntKey.toString(16).padStart(64, "0")}`.toLowerCase();
+      } catch {
+        return `0x${keyStr}`.toLowerCase();
+      }
     };
 
-    // Build value map from snapshot
+    // Build value map from snapshot storage entries
     const valuesByKey = new Map<string, string>();
-    snapshotData.data.storageEntries?.forEach(
-      (entry: { key: string; value: string }) => {
-        const normalizedKey = normalizeStorageKey(entry.key);
-        valuesByKey.set(normalizedKey, entry.value);
-      }
-    );
+    const storageEntries = snapshot.storageEntries || [];
+    storageEntries.forEach((entry: { key: string; value: string }) => {
+      const normalizedKey = normalizeKey(entry.key);
+      valuesByKey.set(normalizedKey, entry.value);
+      console.log(`[buildPermutation] Storage entry: ${normalizedKey} = ${entry.value}`);
+    });
 
     // Build permutation: map registered keys to their indices in the snapshot
     const perm: bigint[] = [];
     for (let i = 0; i < registeredKeys.length; i++) {
-      const registeredKey = normalizeStorageKey(registeredKeys[i]);
+      const registeredKey = normalizeKey(registeredKeys[i]);
       let foundIndex = -1;
 
       // Find index in snapshot storage entries
-      for (let j = 0; j < snapshotData.data.storageEntries.length; j++) {
-        const snapshotKey = normalizeStorageKey(
-          snapshotData.data.storageEntries[j].key
-        );
+      for (let j = 0; j < storageEntries.length; j++) {
+        const snapshotKey = normalizeKey(storageEntries[j].key);
         if (snapshotKey === registeredKey) {
           foundIndex = j;
           break;
@@ -308,7 +324,8 @@ export default function CloseChannelPage() {
       }
 
       if (foundIndex === -1) {
-        // Key not found in snapshot, use -1 or 0
+        // Key not found in snapshot, use 0
+        console.warn(`[buildPermutation] Key ${registeredKey} not found in snapshot, using index 0`);
         perm.push(BigInt(0));
       } else {
         perm.push(BigInt(foundIndex));
@@ -316,27 +333,70 @@ export default function CloseChannelPage() {
     }
 
     setPermutation(perm);
+    console.log("[buildPermutation] Permutation:", perm.map(p => p.toString()));
 
-    // Build final balances array (one balance per participant)
-    const balances: bigint[] = [];
-    for (const participant of channelParticipants) {
-      // Find participant's balance in snapshot
-      let participantBalance = BigInt(0);
-      snapshotData.data.storageEntries?.forEach(
-        (entry: { key: string; value: string }) => {
-          // Extract participant address from key if it matches
-          // This is a simplified version - actual implementation may need more logic
-          if (entry.key.toLowerCase().includes(participant.toLowerCase())) {
-            participantBalance = BigInt(entry.value);
+    // Build final balances: fetch all L2 MPT keys in parallel for efficiency
+    setFinalProofStatus("Fetching balance slot index...");
+
+    // Get balance slot index from target contract
+    let balanceSlotIndex = 0;
+    if (channelTargetContract) {
+      try {
+        const slotIndexResponse = await fetch(
+          `/api/get-balance-slot-index?targetContract=${channelTargetContract}`
+        );
+        if (slotIndexResponse.ok) {
+          const slotIndexData = await slotIndexResponse.json();
+          if (slotIndexData.success) {
+            balanceSlotIndex = slotIndexData.slotIndex;
+            console.log("[buildPermutation] Balance slot index:", balanceSlotIndex);
           }
         }
-      );
+      } catch (e) {
+        console.warn("[buildPermutation] Failed to fetch balance slot index, using default 0");
+      }
+    }
+
+    setFinalProofStatus("Fetching participant L2 keys...");
+
+    // Fetch all L2 MPT keys in parallel using dynamic balance slot index
+    const l2KeyPromises = channelParticipants.map((participant) =>
+      fetch(`/api/get-l2-mpt-key?channelId=${channelId}&participant=${participant}&slotIndex=${balanceSlotIndex}`)
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null)
+    );
+
+    const l2KeyResults = await Promise.all(l2KeyPromises);
+
+    // Build balances array by matching L2 keys to storage entries
+    const balances: bigint[] = [];
+    for (let i = 0; i < channelParticipants.length; i++) {
+      const participant = channelParticipants[i];
+      const l2KeyData = l2KeyResults[i];
+      let participantBalance = BigInt(0);
+
+      if (l2KeyData?.success && l2KeyData?.l2MptKey) {
+        const l2MptKey = normalizeKey(l2KeyData.l2MptKey);
+        const balanceStr = valuesByKey.get(l2MptKey);
+        if (balanceStr) {
+          participantBalance = BigInt(balanceStr);
+          console.log(`[buildPermutation] Participant ${i} (${participant}): L2Key=${l2MptKey}, balance=${balanceStr}`);
+        } else {
+          // Debug: log all keys in the map
+          console.warn(`[buildPermutation] No balance found for participant ${i} L2Key ${l2MptKey}`);
+          console.warn(`[buildPermutation] Available keys:`, Array.from(valuesByKey.keys()));
+        }
+      } else {
+        console.warn(`[buildPermutation] Failed to get L2 key for participant ${i} (${participant})`);
+      }
+
       balances.push(participantBalance);
     }
 
     setFinalBalances(balances);
+    console.log("[buildPermutation] Final balances:", balances.map(b => b.toString()));
 
-    return { permutation: perm, finalBalances: balances, snapshotData };
+    return { permutation: perm, finalBalances: balances, snapshot };
   }, [
     channelId,
     channelParticipants,
@@ -351,68 +411,71 @@ export default function CloseChannelPage() {
       throw new Error("Missing channel data");
     }
 
-    setFinalProofStatus("Preparing circuit input...");
+    setFinalProofStatus("Preparing circuit input from state snapshot...");
 
-    // Get final state snapshot
+    // Get the latest state snapshot from verified proofs (same as buildPermutation)
     const response = await fetch(
-      `/api/get-contract-state-for-proof?channelId=${channelId}&stateRoot=${finalStateRoot}`
+      `/api/get-latest-state-snapshot?channelId=${channelId}`
     );
     if (!response.ok) {
-      throw new Error("Failed to fetch final state snapshot");
+      throw new Error("Failed to fetch latest state snapshot");
     }
-    const snapshotData = await response.json();
+    const snapshotResponse = await response.json();
 
-    if (!snapshotData.success || !snapshotData.data) {
-      throw new Error("Invalid state snapshot data");
+    if (!snapshotResponse.success || !snapshotResponse.snapshot) {
+      throw new Error("No verified state snapshot found for this channel");
     }
 
-    // Get registered keys from contract (already fetched via hook)
-    if (!preAllocatedKeys || !Array.isArray(preAllocatedKeys)) {
-      throw new Error("Failed to fetch registered keys from contract");
-    }
-    const registeredKeys: string[] = preAllocatedKeys as string[];
+    const snapshot = snapshotResponse.snapshot;
+    const storageEntries = snapshot.storageEntries || [];
+
+    console.log("[generateGroth16ProofForClose] State snapshot:", {
+      stateRoot: snapshot.stateRoot,
+      storageEntriesCount: storageEntries.length,
+    });
 
     const treeSize = Number(channelTreeSize);
     if (![16, 32, 64, 128].includes(treeSize)) {
       throw new Error(`Unsupported tree size: ${treeSize}`);
     }
 
-    // Build storage keys and values arrays
+    // R_MOD constant from BridgeProofManager contract
+    const R_MOD = BigInt(
+      "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"
+    );
+
+    // Build storage keys and values arrays from the state snapshot
+    // The snapshot storageEntries should already be in the correct order
     const storageKeys: string[] = [];
     const storageValues: string[] = [];
 
-    // Normalize storage key
-    const normalizeStorageKey = (key: string): string => {
-      return key.toLowerCase().startsWith("0x")
-        ? key.toLowerCase()
-        : `0x${key.toLowerCase()}`;
-    };
+    for (let i = 0; i < storageEntries.length && i < treeSize; i++) {
+      const entry = storageEntries[i];
+      // Convert key to BigInt, mod by R_MOD, then to string
+      const keyBigInt = BigInt(entry.key);
+      const modedKey = (keyBigInt % R_MOD).toString();
 
-    // Build value map
-    const valuesByKey = new Map<string, string>();
-    snapshotData.data.storageEntries?.forEach(
-      (entry: { key: string; value: string }) => {
-        const normalizedKey = normalizeStorageKey(entry.key);
-        valuesByKey.set(normalizedKey, entry.value);
-      }
-    );
+      // Convert value to BigInt, mod by R_MOD, then to string
+      const valueBigInt = BigInt(entry.value);
+      const modedValue = (valueBigInt % R_MOD).toString();
 
-    // Fill arrays up to tree size
-    for (let i = 0; i < Math.min(treeSize, registeredKeys.length); i++) {
-      const key = registeredKeys[i];
-      const normalizedKey = normalizeStorageKey(key);
-      const value = valuesByKey.get(normalizedKey) || "0";
-      storageKeys.push(normalizedKey);
-      storageValues.push(value);
+      storageKeys.push(modedKey);
+      storageValues.push(modedValue);
+
+      console.log(`[generateGroth16ProofForClose] Entry ${i}: key=${entry.key} -> ${modedKey}, value=${entry.value} -> ${modedValue}`);
     }
 
     // Pad to tree size if needed
     while (storageKeys.length < treeSize) {
-      storageKeys.push(
-        "0x0000000000000000000000000000000000000000000000000000000000000000"
-      );
+      storageKeys.push("0");
       storageValues.push("0");
     }
+
+    console.log("[generateGroth16ProofForClose] Circuit input prepared:", {
+      treeSize,
+      keysCount: storageKeys.length,
+      valuesCount: storageValues.length,
+    });
 
     setFinalProofStatus(
       "Generating Groth16 proof... This may take a few minutes..."
@@ -458,16 +521,40 @@ export default function CloseChannelPage() {
 
     try {
       // Step 1: Build permutation and final balances
-      await buildPermutation();
+      const { permutation: perm, finalBalances: balances } = await buildPermutation();
+      console.log("[handleVerifyAndClose] buildPermutation completed:", {
+        permutationLength: perm.length,
+        balancesLength: balances.length,
+        balances: balances.map(b => b.toString()),
+      });
 
       // Step 2: Generate Groth16 proof
       setCloseChannelModalStep("generating_proof");
-      await generateGroth16ProofForClose();
+      const proofResult = await generateGroth16ProofForClose();
+      console.log("[handleVerifyAndClose] generateGroth16ProofForClose completed");
+
+      // Get the proof from state since generateGroth16ProofForClose sets it there
+      // But due to React batching, we need to use the returned value
+      const proof = {
+        pA: [...proofResult.proof.pA] as [bigint, bigint, bigint, bigint],
+        pB: [...proofResult.proof.pB] as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint],
+        pC: [...proofResult.proof.pC] as [bigint, bigint, bigint, bigint],
+      };
 
       // Step 3: Sign and submit transaction
+      // Pass values directly to avoid React state timing issues
       setCloseChannelModalStep("signing");
       setFinalProofStatus("Submitting to blockchain...");
-      await closeChannel();
+      console.log("[handleVerifyAndClose] Calling closeChannel with:", {
+        finalBalances: balances.map(b => b.toString()),
+        permutation: perm.map(p => p.toString()),
+        proofProvided: !!proof,
+      });
+      await closeChannel({
+        finalBalances: balances,
+        permutation: perm,
+        proof,
+      });
 
       // Note: confirming step will be set by useCloseChannel hook
       // Success - redirect to withdraw after a delay
@@ -496,11 +583,17 @@ export default function CloseChannelPage() {
 
   // Handle modal close
   const handleCloseChannelModalClose = useCallback(() => {
-    if (!isClosingChannel && !isClosingChannelProcessing) {
+    // Allow closing in error or completed states regardless of processing state
+    const canCloseByState = closeChannelModalStep === "error" || closeChannelModalStep === "completed";
+    const canCloseByProcessing = !isClosingChannel && !isClosingChannelProcessing;
+
+    if (canCloseByState || canCloseByProcessing) {
       setShowCloseChannelModal(false);
       setCloseChannelModalStep("idle");
+      // Reset error state when closing
+      setCloseChannelError("");
     }
-  }, [isClosingChannel, isClosingChannelProcessing]);
+  }, [isClosingChannel, isClosingChannelProcessing, closeChannelModalStep]);
 
   // Update modal step based on close channel hook step
   useEffect(() => {
@@ -510,6 +603,8 @@ export default function CloseChannelPage() {
       setCloseChannelModalStep("confirming");
     } else if (closeChannelStep === "completed") {
       setCloseChannelModalStep("completed");
+    } else if (closeChannelStep === "error") {
+      setCloseChannelModalStep("error");
     }
   }, [closeChannelStep, closeChannelModalStep]);
 
@@ -517,6 +612,7 @@ export default function CloseChannelPage() {
   useEffect(() => {
     if (closeChannelHookError) {
       setCloseChannelError(closeChannelHookError);
+      setCloseChannelModalStep("error");
     }
   }, [closeChannelHookError]);
 

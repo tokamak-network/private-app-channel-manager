@@ -119,13 +119,31 @@ export async function GET(request: NextRequest) {
     // Build storage entries for each participant
     const storageEntries: Array<{ key: string; value: string }> = [];
 
+    // Get balance slot index from target contract
+    let balanceSlotIndex = 0;
+    const slotIndexResult = await readContracts(config, {
+      contracts: [
+        {
+          address: bridgeCoreAddress,
+          abi: bridgeCoreAbi,
+          functionName: 'getBalanceSlotIndex',
+          args: [targetContract as `0x${string}`],
+          chainId: sepolia.id,
+        },
+      ],
+    });
+    if (slotIndexResult[0]?.status === "success") {
+      balanceSlotIndex = Number(slotIndexResult[0].result);
+      console.log('[API] Balance slot index:', balanceSlotIndex);
+    }
+
     // Batch all participant data requests together
     const participantContracts = participants.flatMap((participant) => [
       {
         address: bridgeCoreAddress,
         abi: bridgeCoreAbi,
         functionName: 'getL2MptKey',
-        args: [channelId as `0x${string}`, participant as `0x${string}`],
+        args: [channelId as `0x${string}`, participant as `0x${string}`, balanceSlotIndex],
         chainId: sepolia.id,
       },
       {

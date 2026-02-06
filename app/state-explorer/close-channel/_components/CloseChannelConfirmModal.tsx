@@ -99,10 +99,12 @@ export function CloseChannelConfirmModal({
 
   const handleClose = () => {
     if (modalState !== "processing") {
+      // Call onClose first, then reset internal state
+      // This ensures parent can check the current step before it's reset
+      onClose();
       setModalState("confirm");
       updateStep("idle");
       setError(null);
-      onClose();
     }
   };
 
