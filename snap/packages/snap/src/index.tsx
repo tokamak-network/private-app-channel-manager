@@ -145,15 +145,23 @@ async function saveSettings(settings: Settings): Promise<void> {
  * @param method
  * @param params
  */
+let rpcIdCounter = 1;
+
 async function rpcCall(method: string, params: unknown[]): Promise<string> {
   try {
-    const body = JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 });
+    const id = rpcIdCounter++;
+    const body = JSON.stringify({ jsonrpc: '2.0', method, params, id });
     console.log('RPC Request:', body);
 
-    const response = await fetch(RPC_URL, {
+    const url = `${RPC_URL}?_t=${Date.now()}_${id}`;
+    const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
       body,
+      cache: 'no-store',
     });
 
     const data = await response.json();

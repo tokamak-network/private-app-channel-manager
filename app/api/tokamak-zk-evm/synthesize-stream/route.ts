@@ -151,10 +151,12 @@ export async function POST(req: NextRequest) {
 
           if (stderr) {
             const stderrStr = String(stderr);
+            // "afterMessage error" with "Undefined synthesizer handler for opcode INVALID"
+            // is a non-fatal warning (EVM revert), not a critical failure.
+            // Only treat step-level and handler-level errors as fatal.
             const hasSynthesizerError =
               stderrStr.includes("Synthesizer: step error:") ||
-              stderrStr.includes("Synthesizer: Handler:") ||
-              stderrStr.includes("Undefined synthesizer handler");
+              stderrStr.includes("Synthesizer: Handler:");
 
             if (hasSynthesizerError) {
               const errorMatch = stderrStr.match(/error: (.+?)(?:\n|$)/);
@@ -183,6 +185,12 @@ export async function POST(req: NextRequest) {
         const blockInfoPath = path.join(synthOutputPath, "block_info.json");
         await fs.writeFile(blockInfoPath, JSON.stringify(blockInfo, null, 2));
 
+        console.log("[synthesize-stream] Fetching contract code for:", {
+          effectiveTargetContract,
+          targetContract,
+          snapshotContractAddress: previousStateSnapshot?.contractAddress,
+        });
+        
         const contractCode = await getContractCode(
           targetChainId,
           effectiveTargetContract,
@@ -191,6 +199,11 @@ export async function POST(req: NextRequest) {
         const contractCodesArray = [
           { address: effectiveTargetContract, code: bytesToHex(contractCode) },
         ];
+        
+        console.log("[synthesize-stream] Contract codes prepared:", {
+          address: effectiveTargetContract,
+          codeLength: contractCode?.length,
+        });
         const contractCodePath = path.join(
           synthOutputPath,
           "contract_codes.json"

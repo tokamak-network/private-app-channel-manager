@@ -14,10 +14,11 @@ import { toBytes32 } from "@/lib/channelId";
 import {
   useBridgeDepositManagerWrite,
   useBridgeDepositManagerWaitForReceipt,
-  useBridgeCoreRead,
+  useBridgeDepositManagerAddress,
+  useBridgeCoreAddress,
+  useBridgeCoreAbi,
 } from "@/hooks/contract";
-import { getContractAddress, getContractAbi } from "@tokamak/config";
-import { useNetworkId } from "@/hooks/contract/utils";
+import { getContractAbi } from "@tokamak/config";
 
 export type DepositStep =
   | "idle"
@@ -66,7 +67,12 @@ export function useIntegratedDeposit({
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const publicClient = usePublicClient();
-  const networkId = useNetworkId();
+
+  // Use common hooks for contract addresses & ABIs
+  const bridgeCoreAddress = useBridgeCoreAddress();
+  const bridgeCoreAbi = useBridgeCoreAbi();
+  const depositManagerAddress = useBridgeDepositManagerAddress();
+  const depositManagerAbi = getContractAbi("BridgeDepositManager");
 
   const [currentStep, setCurrentStep] = useState<DepositStep>("idle");
   const [mptKeys, setMptKeys] = useState<`0x${string}`[] | null>(null);
@@ -96,7 +102,6 @@ export function useIntegratedDeposit({
   useEffect(() => {
     if (depositTxHash && currentStep === "signing_deposit") {
       setCurrentStep("confirming");
-      console.log("✅ [Step 2] Transaction signed, waiting for confirmation...");
     }
   }, [depositTxHash, currentStep]);
 
@@ -113,6 +118,7 @@ export function useIntegratedDeposit({
   // Handle deposit errors
   useEffect(() => {
     if ((depositWriteError || depositTxError) && currentStep !== "error" && currentStep !== "idle") {
+      console.error("🔴 [Deposit] Error:", (depositWriteError as any)?.shortMessage || depositTxError?.message);
       setCurrentStep("error");
       setError(
         depositWriteError?.message ||
@@ -159,17 +165,14 @@ export function useIntegratedDeposit({
 
     try {
       // ========================================
-      // Step 0: Get number of user storage slots from contract
+      // Step 0: Fetch contract data for deposit
       // ========================================
       const channelIdBytes32 = toBytes32(channelId);
       if (!channelIdBytes32) {
         throw new Error("Invalid channel ID");
       }
 
-      // Get target contract for this channel
-      const bridgeCoreAddress = getContractAddress("BridgeCore", networkId);
-      const bridgeCoreAbi = getContractAbi("BridgeCore");
-      
+      // Get target contract address
       const targetContract = await publicClient.readContract({
         address: bridgeCoreAddress,
         abi: bridgeCoreAbi,
@@ -181,16 +184,48 @@ export function useIntegratedDeposit({
         throw new Error("Target contract not found for channel");
       }
 
-      // Get target contract data to determine number of user storage slots
+      // Verify BridgeDepositManager uses the same BridgeCore
+      const dmBridgeAddress = await publicClient.readContract({
+        address: depositManagerAddress,
+        abi: depositManagerAbi,
+        functionName: "bridge",
+      }) as `0x${string}`;
+
+      const bridgeMatch = dmBridgeAddress.toLowerCase() === bridgeCoreAddress.toLowerCase();
+      console.log("🔍 [Deposit] BridgeCore address check:", {
+        frontend: bridgeCoreAddress,
+        depositManager: dmBridgeAddress,
+        match: bridgeMatch,
+      });
+
+      // Read slot data from the BridgeCore that DepositManager actually uses
+      const effectiveBridgeAddress = bridgeMatch ? bridgeCoreAddress : dmBridgeAddress;
       const targetContractData = await publicClient.readContract({
-        address: bridgeCoreAddress,
+        address: effectiveBridgeAddress,
         abi: bridgeCoreAbi,
         functionName: "getTargetContractData",
         args: [targetContract],
-      }) as { userStorageSlots: unknown[] };
+      }) as {
+        preAllocatedLeaves: { value: bigint; key: string; isActive: boolean }[];
+        userStorageSlots: { slotOffset: number; getterFunctionSignature: string; isLoadedOnChain: boolean }[];
+      };
 
-      const numSlots = targetContractData.userStorageSlots?.length || 1;
-      console.log(`📊 Target contract has ${numSlots} user storage slots`);
+      const userStorageSlots = targetContractData.userStorageSlots || [];
+      const numSlots = userStorageSlots.length;
+      const balanceSlotIdx = userStorageSlots.findIndex((s: any) => !s.isLoadedOnChain);
+
+      console.log("🔍 [Deposit] Target:", targetContract);
+      console.log("🔍 [Deposit] Slots:", userStorageSlots.map((s: any, i: number) =>
+        `[${i}] offset=${s.slotOffset} onChain=${s.isLoadedOnChain}`
+      ));
+      console.log("🔍 [Deposit] Balance slot index:", balanceSlotIdx, "/ Total:", numSlots);
+
+      if (numSlots === 0) {
+        throw new Error("Target contract has no userStorageSlots configured");
+      }
+      if (balanceSlotIdx === -1) {
+        throw new Error("No balance slot found (all slots have isLoadedOnChain=true)");
+      }
 
       // ========================================
       // Step 1: Generate MPT Keys (First Signature)
@@ -198,16 +233,14 @@ export function useIntegratedDeposit({
       setCurrentStep("signing_mpt");
 
       const message = L2_PRV_KEY_MESSAGE + channelId.toString();
-      console.log("📝 [Step 1] Signing for MPT key generation...");
-
       const signature = await signMessageAsync({ message });
-      console.log("✅ [Step 1] Signature received");
 
-      // Generate multiple MPT keys from single signature (one per slot)
+      // Generate MPT keys - one per userStorageSlot, using array index (0, 1, ...)
       const accountL2 = deriveL2AccountWithMultipleMptKeys(signature, numSlots);
       const generatedMptKeys = accountL2.mptKeys;
       setMptKeys(generatedMptKeys);
-      console.log(`✅ [Step 1] ${numSlots} MPT keys generated:`, generatedMptKeys);
+
+      console.log("🔍 [Deposit] MPT keys:", generatedMptKeys.length, "keys generated");
 
       setCurrentStep("mpt_generated");
 
@@ -215,16 +248,31 @@ export function useIntegratedDeposit({
       // Step 2: Execute Deposit (Second Signature)
       // ========================================
       setCurrentStep("signing_deposit");
-      console.log("📝 [Step 2] Executing deposit transaction...");
 
       const amount = parseUnits(depositAmount, tokenDecimals);
 
-      // This triggers MetaMask popup - step changes to "confirming" when txHash is received
+      // Pre-flight simulation
+      try {
+        await publicClient.simulateContract({
+          address: depositManagerAddress,
+          abi: depositManagerAbi,
+          functionName: "depositToken",
+          args: [channelIdBytes32, amount, generatedMptKeys],
+          account: address,
+        });
+      } catch (simError: any) {
+        const reason = simError?.shortMessage || simError?.message || "Unknown error";
+        console.error("🔴 [Deposit] Simulation failed:", reason);
+        setError(reason);
+        setCurrentStep("error");
+        return;
+      }
+
+      // Simulation passed - send the real transaction
       writeDeposit({
         functionName: "depositToken",
         args: [channelIdBytes32, amount, generatedMptKeys],
       });
-      // Don't set "confirming" here - wait for depositTxHash in useEffect
     } catch (err) {
       console.error("❌ Error in deposit flow:", err);
 
@@ -252,7 +300,10 @@ export function useIntegratedDeposit({
     signMessageAsync,
     writeDeposit,
     publicClient,
-    networkId,
+    bridgeCoreAddress,
+    bridgeCoreAbi,
+    depositManagerAddress,
+    depositManagerAbi,
   ]);
 
   const isProcessing =

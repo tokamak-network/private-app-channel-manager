@@ -136,6 +136,16 @@ export default function CloseChannelPage() {
     },
   });
 
+  // Get channel's pre-allocated leaves count (per-channel, NOT per-target-contract)
+  const { data: channelPreAllocCountData } = useBridgeCoreRead({
+    functionName: "getChannelPreAllocatedLeavesCount",
+    args: channelId ? [channelId as `0x${string}`] : undefined,
+    query: {
+      enabled: !!channelId && isConnected && phase === 2,
+    },
+  });
+  const channelPreAllocCount = channelPreAllocCountData ? Number(channelPreAllocCountData) : 0;
+
   // useCloseChannel hook
   const {
     closeChannel,
@@ -276,10 +286,15 @@ export default function CloseChannelPage() {
     setFinalProofStatus("Calculating permutation and final balances...");
 
     // Get registered keys from contract (already fetched via hook)
-    if (!preAllocatedKeys || !Array.isArray(preAllocatedKeys)) {
-      throw new Error("Failed to fetch registered keys from contract");
+    // IMPORTANT: Only include pre-allocated keys if channelPreAllocCount > 0 (per-channel)
+    // A channel with preAllocCount=0 should NOT include pre-allocated keys
+    let registeredKeys: string[] = [];
+    if (channelPreAllocCount > 0) {
+      if (!preAllocatedKeys || !Array.isArray(preAllocatedKeys)) {
+        throw new Error("Failed to fetch registered keys from contract");
+      }
+      registeredKeys = preAllocatedKeys as string[];
     }
-    const registeredKeys: string[] = preAllocatedKeys as string[];
 
     // Normalize storage key to hex format for comparison
     const normalizeKey = (key: string | bigint): string => {
@@ -403,6 +418,7 @@ export default function CloseChannelPage() {
     finalStateRoot,
     channelTargetContract,
     preAllocatedKeys,
+    channelPreAllocCount,
   ]);
 
   // Phase 2: Generate Groth16 proof

@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  logging: {
+    fetches: {
+      fullUrl: false,
+    },
+  },
+
   // Ignore TypeScript errors in build (for submodule compatibility)
   typescript: {
     // Dangerously allow production builds to complete even if there are type errors

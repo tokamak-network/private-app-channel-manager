@@ -16,9 +16,6 @@ export async function GET(request: Request, { params }: RouteParams) {
     const { id } = await params;
     // Decode URL-encoded channel ID if needed
     const channelId = decodeURIComponent(id);
-    console.log('[API] GET /api/channels/:id - Raw ID:', id);
-    console.log('[API] GET /api/channels/:id - Decoded Channel ID:', channelId);
-    console.log('[API] GET /api/channels/:id - Normalized (lowercase):', channelId.toLowerCase());
 
     // getChannel handles case-insensitive lookup internally
     // It normalizes to lowercase and searches for the channel
@@ -70,8 +67,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const { id } = await params;
     // Decode URL-encoded channel ID if needed
     const channelId = decodeURIComponent(id);
-    console.log('[API] PATCH /api/channels/:id - Channel ID:', channelId);
-    console.log('[API] PATCH /api/channels/:id - Normalized (lowercase):', channelId.toLowerCase());
     const body = await request.json();
 
     // Check if channel exists (case-insensitive lookup)

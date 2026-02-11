@@ -141,7 +141,7 @@ function TransactionPage() {
 
   // Handle proof generation with SSE progress tracking (called from modal)
   const handleGenerateProof = useCallback(async (keySeed: `0x${string}`) => {
-    if (!currentChannelId || !address || !recipient || !tokenAmount) {
+    if (!currentChannelId || !address || !recipient || !tokenAmount || !tokenAddress) {
       throw new Error("Missing required parameters");
     }
 
@@ -166,25 +166,22 @@ function TransactionPage() {
       throw new Error("Could not find previous state snapshot");
     }
 
-    // Import required modules
     const { createERC20TransferTx } = await import("@/lib/createERC20TransferTx");
     const { bytesToHex } = await import("@ethereumjs/util");
-    const { TON_TOKEN_ADDRESS } = await import("@tokamak/config");
     const { parseInputAmount } = await import("@/lib/utils/format");
     const JSZip = (await import("jszip")).default;
 
-    // Create signed L2 transaction
-    const amountInWei = parseInputAmount(tokenAmount.trim(), 18);
+    const effectiveTokenAddress = tokenAddress as `0x${string}`;
+    const amountInWei = parseInputAmount(tokenAmount.trim(), tokenDecimals);
     const signedTx = await createERC20TransferTx(
       0,
       recipient,
       amountInWei,
       keySeed,
-      TON_TOKEN_ADDRESS
+      effectiveTokenAddress
     );
     const signedTxStr = bytesToHex(signedTx.serialize());
 
-    // Make SSE request for proof generation with progress
     const response = await fetch("/api/tokamak-zk-evm/synthesize-stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -193,6 +190,7 @@ function TransactionPage() {
         channelInitTxHash: initTxHash,
         signedTxRlpStr: signedTxStr,
         previousStateSnapshot,
+        targetContract: effectiveTokenAddress,
       }),
     });
 
@@ -355,7 +353,7 @@ function TransactionPage() {
 
     // Refresh proof list
     setProofListRefreshKey((prev) => prev + 1);
-  }, [currentChannelId, address, recipient, tokenAmount, fetchSnapshot]);
+  }, [currentChannelId, address, recipient, tokenAmount, tokenAddress, tokenDecimals, fetchSnapshot]);
 
   // Handle proof download
   const handleDownloadProof = useCallback(() => {

@@ -283,7 +283,34 @@ export function useSubmitProof(channelId: string | null) {
           signature,
         ];
 
-        console.log("contractArgs", contractArgs);
+        // Detailed logging for submitProofAndSignature parameters
+        console.log("=".repeat(80));
+        console.log("[submitProofAndSignature] CONTRACT CALL PARAMETERS");
+        console.log("=".repeat(80));
+        console.log("\n[1] channelId (bytes32):");
+        console.log("   ", channelIdBytes32);
+        console.log("\n[2] proofs array (length:", proofDataForContract.length, "):");
+        proofDataForContract.forEach((proof, idx) => {
+          console.log(`\n   --- Proof ${idx + 1} ---`);
+          console.log("   proofPart1 (length:", proof.proofPart1.length, "):");
+          proof.proofPart1.forEach((v, i) => console.log(`      [${i}]: ${v.toString(16).padStart(64, "0")}`));
+          console.log("   proofPart2 (length:", proof.proofPart2.length, "):");
+          proof.proofPart2.forEach((v, i) => console.log(`      [${i}]: ${v.toString(16).padStart(64, "0")}`));
+          console.log("   publicInputs (length:", proof.publicInputs.length, "):");
+          proof.publicInputs.slice(0, 20).forEach((v, i) => console.log(`      [${i}]: ${v.toString(16).padStart(64, "0")}`));
+          if (proof.publicInputs.length > 20) {
+            console.log(`      ... and ${proof.publicInputs.length - 20} more entries`);
+          }
+          console.log("   smax:", proof.smax.toString());
+        });
+        console.log("\n[3] signature:");
+        console.log("   message:", signature.message);
+        console.log("   rx:", signature.rx.toString());
+        console.log("   ry:", signature.ry.toString());
+        console.log("   z:", signature.z.toString());
+        console.log("=".repeat(80));
+        console.log("Full contractArgs object:", contractArgs);
+        console.log("=".repeat(80));
 
         writeContract({
           functionName: "submitProofAndSignature",

@@ -65,13 +65,13 @@ export const deriveMultipleMptKeysFromSignature = (
 ): `0x${string}`[] => {
   const keys = deriveL2KeysFromSignature(signature);
   const address = deriveL2AddressFromKeys(keys);
-  
+
   const mptKeys: `0x${string}`[] = [];
   for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
     const mptKey = deriveL2MptKeyFromAddress(address, slotIndex);
     mptKeys.push(mptKey);
   }
-  
+
   return mptKeys;
 };
 
@@ -97,7 +97,7 @@ export const deriveL2AccountWithMultipleMptKeys = (
 ): DerivedL2AccountMultiSlot => {
   const keys = deriveL2KeysFromSignature(signature);
   const address = deriveL2AddressFromKeys(keys);
-  
+
   const mptKeys: `0x${string}`[] = [];
   for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
     const mptKey = deriveL2MptKeyFromAddress(address, slotIndex);

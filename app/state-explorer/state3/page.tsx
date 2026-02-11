@@ -120,6 +120,16 @@ function State3Page() {
   // Cast preAllocatedKeys to the correct type
   const preAllocatedKeys = preAllocatedKeysData as `0x${string}`[] | undefined;
 
+  // Get channel's pre-allocated leaves count (per-channel, NOT per-target-contract)
+  const { data: channelPreAllocCountData } = useBridgeCoreRead({
+    functionName: "getChannelPreAllocatedLeavesCount",
+    args: currentChannelId ? [currentChannelId as `0x${string}`] : undefined,
+    query: {
+      enabled: !!currentChannelId && isConnected,
+    },
+  });
+  const channelPreAllocCount = channelPreAllocCountData ? Number(channelPreAllocCountData) : 0;
+
   // State for user balance from latest verified proof
   const [userBalanceFromSnapshot, setUserBalanceFromSnapshot] = useState<bigint>(BigInt(0));
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
@@ -493,13 +503,16 @@ function State3Page() {
     }
 
     const treeSize = Number(channelTreeSize);
-    const preAllocatedCount = preAllocatedKeys ? preAllocatedKeys.length : 0;
+    // IMPORTANT: Use channelPreAllocCount (per-channel) NOT preAllocatedKeys.length (per-target-contract)
+    // A channel with preAllocCount=0 should NOT include pre-allocated leaves even if the
+    // target contract has pre-allocated keys registered globally
+    const preAllocatedCount = channelPreAllocCount;
     const participantsArray = channelParticipants as unknown as `0x${string}`[];
     const participantCount = participantsArray.length;
 
     console.log("[State3Page] 🌳 Tree size:", treeSize);
     console.log(
-      "[State3Page] 🌿 PreAllocated count from contract:",
+      "[State3Page] 🌿 PreAllocated count (per-channel):",
       preAllocatedCount
     );
     console.log("[State3Page] 👥 Participant count:", participantCount);
@@ -690,6 +703,7 @@ function State3Page() {
     channelTargetContract,
     channelTreeSize,
     preAllocatedKeys,
+    channelPreAllocCount,
     config,
     bridgeCoreAddress,
     bridgeCoreAbi,

@@ -86,8 +86,8 @@ export async function fetchChannelInitialState(
 
   const [targetContract, state, participantCount, initialRoot] = channelInfo;
 
-  // Get pre-allocated keys
-  const preAllocatedKeysResult = await readContracts(config, {
+  // Get pre-allocated keys and channel's pre-allocated count
+  const [preAllocatedKeysResult, preAllocCountResult] = await readContracts(config, {
     contracts: [
       {
         address: bridgeCoreAddress,
@@ -95,18 +95,31 @@ export async function fetchChannelInitialState(
         functionName: "getPreAllocatedKeys",
         args: [targetContract],
       },
+      {
+        address: bridgeCoreAddress,
+        abi: bridgeCoreAbi,
+        functionName: "getChannelPreAllocatedLeavesCount",
+        args: [BigInt(channelIdNum)],
+      },
     ],
   });
 
-  const preAllocatedKeys = preAllocatedKeysResult?.[0]?.result as
+  const preAllocatedKeys = preAllocatedKeysResult?.result as
     | readonly `0x${string}`[]
     | undefined;
+
+  const preAllocCount = preAllocCountResult?.status === "success"
+    ? Number(preAllocCountResult.result)
+    : 0;
 
   const registeredKeys: string[] = [];
   const preAllocatedLeaves: Array<{ key: string; value: string }> = [];
 
   // Fetch pre-allocated leaves
-  if (preAllocatedKeys && preAllocatedKeys.length > 0) {
+  // IMPORTANT: Must check preAllocCount (per-channel) NOT preAllocatedKeys.length (per-target-contract)
+  // A channel with preAllocCount=0 should NOT include pre-allocated leaves even if the
+  // target contract has pre-allocated keys registered globally
+  if (preAllocCount > 0 && preAllocatedKeys && preAllocatedKeys.length > 0) {
     const preAllocatedLeafResults = await readContracts(config, {
       contracts: preAllocatedKeys.map((key) => ({
         address: bridgeCoreAddress,

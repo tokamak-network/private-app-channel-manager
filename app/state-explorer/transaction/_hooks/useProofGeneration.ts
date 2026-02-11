@@ -13,6 +13,7 @@ import type { StateSnapshot } from "tokamak-l2js";
 
 interface UseProofGenerationParams {
   channelId: string | null;
+  targetContract?: `0x${string}`;
   onStepChange?: (step: ProofGenerationStep) => void;
 }
 
@@ -34,6 +35,7 @@ interface UseProofGenerationReturn {
 
 export function useProofGeneration({
   channelId,
+  targetContract,
   onStepChange,
 }: UseProofGenerationParams): UseProofGenerationReturn {
   const { address } = useAccount();
@@ -71,26 +73,27 @@ export function useProofGeneration({
       abortControllerRef.current = new AbortController();
 
       try {
-        // Import required modules for creating signed transaction
         const { createERC20TransferTx } = await import(
           "@/lib/createERC20TransferTx"
         );
         const { bytesToHex } = await import("@ethereumjs/util");
-        const { TON_TOKEN_ADDRESS } = await import("@tokamak/config");
+        const { TON_TOKEN_ADDRESS, getTokenByAddress } = await import("@tokamak/config");
         const { parseInputAmount } = await import("@/lib/utils/format");
 
-        // Create signed L2 transaction
-        const amountInWei = parseInputAmount(params.tokenAmount.trim(), 18);
+        const effectiveContract = targetContract ?? TON_TOKEN_ADDRESS;
+        const tokenInfo = getTokenByAddress(effectiveContract);
+        const decimals = tokenInfo?.decimals ?? 18;
+
+        const amountInWei = parseInputAmount(params.tokenAmount.trim(), decimals);
         const signedTx = await createERC20TransferTx(
           0,
           params.recipient,
           amountInWei,
           params.keySeed,
-          TON_TOKEN_ADDRESS
+          effectiveContract
         );
         const signedTxStr = bytesToHex(signedTx.serialize());
 
-        // Make SSE request
         const response = await fetch("/api/tokamak-zk-evm/synthesize-stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -99,6 +102,7 @@ export function useProofGeneration({
             channelInitTxHash: params.initTxHash,
             signedTxRlpStr: signedTxStr,
             previousStateSnapshot: params.previousStateSnapshot,
+            targetContract: effectiveContract,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -244,7 +248,7 @@ export function useProofGeneration({
         abortControllerRef.current = null;
       }
     },
-    [channelId, address, updateStep]
+    [channelId, address, targetContract, updateStep]
   );
 
   const reset = useCallback(() => {

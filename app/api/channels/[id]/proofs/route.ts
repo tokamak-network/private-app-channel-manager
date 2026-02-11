@@ -21,12 +21,6 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const silent = searchParams.get("silent") === "true";
     
-    // Only log on initial requests (not during polling)
-    if (!silent) {
-      console.log('[API] GET /api/channels/:id/proofs - Channel ID:', channelId);
-      console.log('[API] GET /api/channels/:id/proofs - Normalized (lowercase):', channelId.toLowerCase());
-    }
-    
     const type = (searchParams.get("type") || "submitted") as
       | "submitted"
       | "verified"
