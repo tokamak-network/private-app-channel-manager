@@ -173,6 +173,8 @@ export function useGenerateInitialProof({
 
       // Fetch pre-allocated keys if target contract exists
       let preAllocatedKeysList: `0x${string}`[] = [];
+      let preAllocatedLeavesFromTargetData: Array<{ key: `0x${string}`; value: bigint }> = [];
+      
       if (targetContract && targetContract !== "0x0000000000000000000000000000000000000000") {
         const freshPreAllocKeys = await publicClient.readContract({
           address: bridgeCoreAddress,
@@ -181,6 +183,45 @@ export function useGenerateInitialProof({
           args: [targetContract],
         });
         preAllocatedKeysList = (freshPreAllocKeys as `0x${string}`[]) || [];
+        
+        // WORKAROUND: getPreAllocatedKeys() returns empty for some contracts (e.g., USDT)
+        // Use getTargetContractData() as fallback until contract is upgraded
+        if (preAllocatedKeysList.length === 0) {
+          console.warn("[useGenerateInitialProof] getPreAllocatedKeys() returned empty, trying getTargetContractData() fallback");
+          
+          type PreAllocatedLeafStruct = {
+            value: bigint;
+            key: `0x${string}`;
+            isActive: boolean;
+          };
+          
+          type TargetContractData = {
+            preAllocatedLeaves: readonly PreAllocatedLeafStruct[];
+            registeredFunctions: readonly unknown[];
+            userStorageSlots: readonly unknown[];
+          };
+          
+          const targetContractData = await publicClient.readContract({
+            address: bridgeCoreAddress,
+            abi: bridgeCoreAbi,
+            functionName: "getTargetContractData",
+            args: [targetContract],
+          }) as TargetContractData;
+          
+          if (targetContractData?.preAllocatedLeaves && targetContractData.preAllocatedLeaves.length > 0) {
+            console.log("[useGenerateInitialProof] Found preAllocatedLeaves from getTargetContractData():", 
+              targetContractData.preAllocatedLeaves.length);
+            
+            targetContractData.preAllocatedLeaves.forEach((leaf) => {
+              if (leaf.isActive) {
+                preAllocatedKeysList.push(leaf.key);
+                preAllocatedLeavesFromTargetData.push({ key: leaf.key, value: leaf.value });
+              }
+            });
+            
+            console.log("[useGenerateInitialProof] Extracted active preAllocatedLeaves:", preAllocatedKeysList.length);
+          }
+        }
       }
 
       console.log("🔄 Fresh data fetched from blockchain:");
@@ -219,66 +260,99 @@ export function useGenerateInitialProof({
       const storageValues: string[] = [];
 
       // STEP 1: Add pre-allocated leaves data FIRST
+      // IMPORTANT: Must check preAllocCount (per-channel) NOT preAllocatedKeysList.length (per-target-contract)
+      // A channel with preAllocCount=0 should NOT include pre-allocated leaves even if the
+      // target contract has pre-allocated keys registered globally
       if (preAllocCount > 0 && preAllocatedKeysList.length > 0 && targetContract) {
-        setStatus(`Fetching ${preAllocCount} pre-allocated leaves...`);
+        setStatus(`Fetching ${preAllocatedKeysList.length} pre-allocated leaves...`);
 
         try {
-          // Use publicClient.readContract directly to bypass React Query cache
-          const preAllocatedResults = await Promise.all(
-            preAllocatedKeysList.map((key) =>
-              publicClient.readContract({
-                address: bridgeCoreAddress,
-                abi: bridgeCoreAbi,
-                functionName: "getPreAllocatedLeaf",
-                args: [targetContract, key],
-              })
-            )
-          );
+          if (preAllocatedLeavesFromTargetData.length > 0) {
+            // DO NOT sort: must match the order returned by getPreAllocatedKeys() on-chain,
+            // which is the order the contract's initializeChannelState iterates
+            console.log("🔑 Using preAllocatedLeaves in original order:", preAllocatedLeavesFromTargetData.map(l => l.key));
 
-          preAllocatedResults.forEach((result: unknown, i: number) => {
-            const key = preAllocatedKeysList[i];
-
-            if (!result) {
-              console.log(
-                `Skipping pre-allocated leaf ${i} (doesn't exist or failed to fetch)`
-              );
-              return;
-            }
-
-            const [value, exists] = result as [bigint, boolean];
-
-            if (exists) {
-              // Apply modulo R_MOD as the contract does
-              const modedKey = (BigInt(key) % R_MOD).toString();
-              const modedValue = (value % R_MOD).toString();
+            // Use data already fetched from getTargetContractData() (workaround path)
+            preAllocatedLeavesFromTargetData.forEach((leaf, i) => {
+              const modedKey = (BigInt(leaf.key) % R_MOD).toString();
+              const modedValue = (leaf.value % R_MOD).toString();
 
               storageKeysL2MPT.push(modedKey);
               storageValues.push(modedValue);
 
               console.log(
-                `Pre-allocated leaf ${i}: key=${key} -> ${modedKey}, value=${value.toString()} -> ${modedValue}`
+                `Pre-allocated leaf ${i}: key=${leaf.key} -> ${modedKey}, value=${leaf.value.toString()} -> ${modedValue}`
               );
-            }
-          });
+            });
+          } else {
+            // DO NOT sort: must match the order returned by getPreAllocatedKeys() on-chain
+            console.log("🔑 Using preAllocatedKeys in original order:", preAllocatedKeysList);
+
+            // Use getPreAllocatedLeaf() for each key (normal path)
+            const preAllocatedResults = await Promise.all(
+              preAllocatedKeysList.map((key) =>
+                publicClient.readContract({
+                  address: bridgeCoreAddress,
+                  abi: bridgeCoreAbi,
+                  functionName: "getPreAllocatedLeaf",
+                  args: [targetContract, key],
+                })
+              )
+            );
+
+            preAllocatedResults.forEach((result: unknown, i: number) => {
+              const key = preAllocatedKeysList[i];
+
+              if (!result) {
+                console.log(
+                  `Skipping pre-allocated leaf ${i} (doesn't exist or failed to fetch)`
+                );
+                return;
+              }
+
+              const [value, exists] = result as [bigint, boolean];
+
+              if (exists) {
+                const modedKey = (BigInt(key) % R_MOD).toString();
+                const modedValue = (value % R_MOD).toString();
+
+                storageKeysL2MPT.push(modedKey);
+                storageValues.push(modedValue);
+
+                console.log(
+                  `Pre-allocated leaf ${i}: key=${key} -> ${modedKey}, value=${value.toString()} -> ${modedValue}`
+                );
+              }
+            });
+          }
         } catch (error) {
           console.error("Failed to fetch pre-allocated leaves:", error);
         }
       }
 
-      // Get number of user storage slots from target contract
-      let numSlots = 1; // Default to 1 (balance only)
+      // Get user storage slots from target contract (need full slot info for isLoadedOnChain)
+      type UserStorageSlotInfo = {
+        slotOffset: number;
+        getterFunctionSignature: `0x${string}`;
+        isLoadedOnChain: boolean;
+      };
+      let userStorageSlots: UserStorageSlotInfo[] = [{ slotOffset: 0, getterFunctionSignature: "0x0000000000000000000000000000000000000000000000000000000000000000", isLoadedOnChain: false }];
       try {
         const targetContractData = await publicClient.readContract({
           address: bridgeCoreAddress,
           abi: bridgeCoreAbi,
           functionName: "getTargetContractData",
           args: [targetContract],
-        }) as { userStorageSlots: unknown[] };
-        numSlots = targetContractData.userStorageSlots?.length || 1;
-        console.log(`📊 Target contract has ${numSlots} user storage slots`);
+        }) as { userStorageSlots: UserStorageSlotInfo[] };
+        if (targetContractData.userStorageSlots?.length > 0) {
+          userStorageSlots = targetContractData.userStorageSlots;
+        }
+        console.log(`📊 Target contract has ${userStorageSlots.length} user storage slots:`,
+          userStorageSlots.map((s, i) => `[${i}] offset=${s.slotOffset} onChain=${s.isLoadedOnChain}`));
       } catch (error) {
         console.warn("Failed to get target contract data, defaulting to 1 slot:", error);
       }
+      const numSlots = userStorageSlots.length;
 
       // STEP 2: Add participant data AFTER pre-allocated leaves
       // IMPORTANT: Loop order must match contract's initializeChannelState:
@@ -286,7 +360,8 @@ export function useGenerateInitialProof({
       setStatus(`Processing ${participantCount} participants with ${numSlots} slots each...`);
 
       for (let slotIndex = 0; slotIndex < numSlots && storageKeysL2MPT.length < treeSize; slotIndex++) {
-        setStatus(`Processing slot ${slotIndex + 1} of ${numSlots}...`);
+        const slot = userStorageSlots[slotIndex];
+        setStatus(`Processing slot ${slotIndex + 1} of ${numSlots}${slot.isLoadedOnChain ? " (on-chain)" : ""}...`);
 
         for (
           let i = 0;
@@ -298,31 +373,65 @@ export function useGenerateInitialProof({
           let slotValue = "0";
 
           try {
-            const [l2MptKeyResultRaw, slotValueResultRaw] = await Promise.all([
-              publicClient.readContract({
+            if (slot.isLoadedOnChain) {
+              // On-chain slot: fetch L2 MPT key from BridgeCore and value via
+              // staticcall to target contract's getter function (matches contract logic)
+              const l2MptKeyResultRaw = await publicClient.readContract({
                 address: bridgeCoreAddress,
                 abi: bridgeCoreAbi,
                 functionName: "getL2MptKey",
                 args: [channelId, participant, slotIndex],
-              }),
-              publicClient.readContract({
-                address: bridgeCoreAddress,
-                abi: bridgeCoreAbi,
-                functionName: "getValidatedUserSlotValue",
-                args: [channelId, participant, slotIndex],
-              }),
-            ]);
+              });
 
-            if (l2MptKeyResultRaw !== undefined) {
-              l2MptKey = (l2MptKeyResultRaw as bigint).toString();
-            } else {
-              console.error(`L2 MPT key fetch failed for ${participant} slot ${slotIndex}`);
-            }
+              if (l2MptKeyResultRaw !== undefined) {
+                l2MptKey = (l2MptKeyResultRaw as bigint).toString();
+              }
 
-            if (slotValueResultRaw !== undefined) {
-              slotValue = (slotValueResultRaw as bigint).toString();
+              // Call target contract's getter function with participant address
+              // Must exactly match contract's encoding: abi.encodePacked(bytes32 getterFunctionSignature, abi.encode(address))
+              // = full 32-byte signature (not just 4-byte selector) + 32-byte encoded address
+              const sigWithout0x = slot.getterFunctionSignature.slice(2); // 64 hex chars (32 bytes)
+              const encodedAddr = participant.slice(2).padStart(64, "0"); // 64 hex chars (32 bytes)
+              try {
+                const callResult = await publicClient.call({
+                  to: targetContract,
+                  data: `0x${sigWithout0x}${encodedAddr}` as `0x${string}`,
+                });
+                if (callResult.data && callResult.data.length >= 66) {
+                  slotValue = BigInt(callResult.data).toString();
+                }
+              } catch (callError) {
+                console.warn(`On-chain getter call failed for ${participant} slot ${slotIndex}, using 0:`, callError);
+                slotValue = "0";
+              }
+
+              console.log(
+                `Slot ${slotIndex} participant ${i} (on-chain): key=${l2MptKey}, value=${slotValue}`
+              );
             } else {
-              console.error(`Slot value fetch failed for ${participant} slot ${slotIndex}`);
+              // Balance slot: fetch from BridgeCore (deposit value)
+              const [l2MptKeyResultRaw, slotValueResultRaw] = await Promise.all([
+                publicClient.readContract({
+                  address: bridgeCoreAddress,
+                  abi: bridgeCoreAbi,
+                  functionName: "getL2MptKey",
+                  args: [channelId, participant, slotIndex],
+                }),
+                publicClient.readContract({
+                  address: bridgeCoreAddress,
+                  abi: bridgeCoreAbi,
+                  functionName: "getValidatedUserSlotValue",
+                  args: [channelId, participant, slotIndex],
+                }),
+              ]);
+
+              if (l2MptKeyResultRaw !== undefined) {
+                l2MptKey = (l2MptKeyResultRaw as bigint).toString();
+              }
+
+              if (slotValueResultRaw !== undefined) {
+                slotValue = (slotValueResultRaw as bigint).toString();
+              }
             }
 
             const modedL2MptKey =
