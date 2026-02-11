@@ -235,8 +235,11 @@ export function useIntegratedDeposit({
       const message = L2_PRV_KEY_MESSAGE + channelId.toString();
       const signature = await signMessageAsync({ message });
 
-      // Generate MPT keys - one per userStorageSlot, using array index (0, 1, ...)
-      const accountL2 = deriveL2AccountWithMultipleMptKeys(signature, numSlots);
+      // Generate MPT keys - one per userStorageSlot, using actual Solidity slot offsets
+      // The EVM computes poseidon(l2Address, slotOffset) for SLOAD, so MPT keys must use
+      // the real Solidity slot numbers (e.g., 2 for balances, 6 for isBlackListed in USDT)
+      const slotOffsets = userStorageSlots.map((s: any) => Number(s.slotOffset));
+      const accountL2 = deriveL2AccountWithMultipleMptKeys(signature, slotOffsets);
       const generatedMptKeys = accountL2.mptKeys;
       setMptKeys(generatedMptKeys);
 

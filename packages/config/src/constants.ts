@@ -180,7 +180,10 @@ export const USDC_TOKEN_ADDRESS =
   "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" as `0x${string}`;
 
 /**
- * ERC20 Transfer function selectors and slot indices
+ * ERC20 Transfer function selectors and balance Solidity slot offsets.
+ * `slot` is the actual Solidity storage slot number for the balances mapping,
+ * NOT the userStorageSlots array index. The EVM computes storage keys via
+ * poseidon(l2Address, slotOffset), so this must match the contract layout.
  */
 export const ERC20_TRANSFER: Record<
   `0x${string}`,
@@ -188,14 +191,14 @@ export const ERC20_TRANSFER: Record<
 > = {
   [TON_TOKEN_ADDRESS]: {
     selector: "0xa9059cbb",
-    slot: 0,
+    slot: 0, // TON balances mapping at Solidity slot 0
   },
   ["0x42d3b260c761cD5da022dB56Fe2F89c4A909b04A" as `0x${string}`]: {
     selector: "0xa9059cbb",
-    slot: 1,
+    slot: 2, // USDT balances mapping at Solidity slot 2
   },
   [USDC_TOKEN_ADDRESS]: {
     selector: "0xa9059cbb",
-    slot: 2,
+    slot: 9, // USDC _balances mapping at Solidity slot 9 (TODO: verify when USDC is registered)
   },
 };

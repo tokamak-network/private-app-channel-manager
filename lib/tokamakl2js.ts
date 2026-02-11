@@ -56,19 +56,21 @@ export const deriveL2KeysAndAddressFromSignature = (
 /**
  * Derive multiple MPT keys from a single signature for multi-token support
  * @param signature - The wallet signature
- * @param numSlots - Number of slots (tokens) to generate MPT keys for
+ * @param slotOffsets - Array of actual Solidity storage slot numbers (e.g., [2, 6] for USDT)
+ *                      These must match the EVM bytecode's storage layout so that
+ *                      poseidon(l2Address, slotOffset) matches the SLOAD key computation.
  * @returns Array of MPT keys for each slot
  */
 export const deriveMultipleMptKeysFromSignature = (
   signature: `0x${string}`,
-  numSlots: number
+  slotOffsets: number[]
 ): `0x${string}`[] => {
   const keys = deriveL2KeysFromSignature(signature);
   const address = deriveL2AddressFromKeys(keys);
 
   const mptKeys: `0x${string}`[] = [];
-  for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
-    const mptKey = deriveL2MptKeyFromAddress(address, slotIndex);
+  for (const slotOffset of slotOffsets) {
+    const mptKey = deriveL2MptKeyFromAddress(address, slotOffset);
     mptKeys.push(mptKey);
   }
 
@@ -88,19 +90,21 @@ export type DerivedL2AccountMultiSlot = {
 /**
  * Derive L2 keys, address, and multiple MPT keys from signature for multi-token support
  * @param signature - The wallet signature
- * @param numSlots - Number of slots (tokens) to generate MPT keys for
+ * @param slotOffsets - Array of actual Solidity storage slot numbers (e.g., [2, 6] for USDT)
+ *                      These must match the EVM bytecode's storage layout so that
+ *                      poseidon(l2Address, slotOffset) matches the SLOAD key computation.
  * @returns L2 account info with array of MPT keys
  */
 export const deriveL2AccountWithMultipleMptKeys = (
   signature: `0x${string}`,
-  numSlots: number
+  slotOffsets: number[]
 ): DerivedL2AccountMultiSlot => {
   const keys = deriveL2KeysFromSignature(signature);
   const address = deriveL2AddressFromKeys(keys);
 
   const mptKeys: `0x${string}`[] = [];
-  for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
-    const mptKey = deriveL2MptKeyFromAddress(address, slotIndex);
+  for (const slotOffset of slotOffsets) {
+    const mptKey = deriveL2MptKeyFromAddress(address, slotOffset);
     mptKeys.push(mptKey);
   }
 
