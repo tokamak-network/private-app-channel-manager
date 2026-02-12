@@ -546,16 +546,42 @@ function State3Page() {
       }
     );
 
-    // Contract expects permutation length = preAllocatedCount + participantCount
-    // NOT treeSize!
-    const expectedPermutationLength = preAllocatedCount + participantCount;
+    // Get userStorageSlots count from target contract data
+    setStatus("Fetching target contract data...");
+    const targetContractDataResult = await readContracts(config, {
+      contracts: [
+        {
+          address: bridgeCoreAddress,
+          abi: bridgeCoreAbi,
+          functionName: "getTargetContractData" as const,
+          args: [channelTargetContract as `0x${string}`],
+        },
+      ],
+    });
+
+    let userStorageSlotsCount = 1;
+    if (targetContractDataResult[0]?.status === "success") {
+      const tcd = targetContractDataResult[0].result as any;
+      const userStorageSlots = tcd.userStorageSlots || [];
+      userStorageSlotsCount = userStorageSlots.length;
+    }
+
+    console.log("[State3Page] 📊 userStorageSlotsCount:", userStorageSlotsCount);
+
+    // Contract expects permutation length = preAllocatedCount + (participantCount * userStorageSlotsCount)
+    const expectedPermutationLength = preAllocatedCount + (participantCount * userStorageSlotsCount);
     console.log(
       "[State3Page] 📐 Expected permutation length:",
       expectedPermutationLength
     );
 
     const perm: bigint[] = [];
-    const balances: bigint[] = [];
+    // finalSlotValues[participantIndex][slotIndex] - 2D array for multi-slot support
+    const slotValues: bigint[][] = [];
+    // Initialize slotValues for each participant
+    for (let i = 0; i < participantCount; i++) {
+      slotValues.push(new Array(userStorageSlotsCount).fill(BigInt(0)));
+    }
 
     // Step 1: Add permutation entries for pre-allocated leaves FIRST
     // Contract iterates preAllocatedKeys from contract storage
@@ -587,90 +613,79 @@ function State3Page() {
     }
 
     // Step 2: Add permutation entries for participants
-    // First, get the balance slot index from target contract
-    setStatus("Fetching balance slot index...");
-    let balanceSlotIndex = 0;
-    if (channelTargetContract) {
-      const slotIndexResult = await readContracts(config, {
-        contracts: [
-          {
-            address: bridgeCoreAddress,
-            abi: bridgeCoreAbi,
-            functionName: "getBalanceSlotIndex" as const,
-            args: [channelTargetContract as `0x${string}`],
-          },
-        ],
-      });
-      if (slotIndexResult[0]?.status === "success") {
-        balanceSlotIndex = Number(slotIndexResult[0].result);
-        console.log("[State3Page] Balance slot index from contract:", balanceSlotIndex);
+    // Contract iterates: slot-first, participant-second
+    // for (j = 0; j < userStorageSlotsCount; j++)
+    //   for (i = 0; i < participants.length; i++)
+    setStatus("Fetching participant MPT keys...");
+
+    // Fetch MPT keys for ALL slots of ALL participants
+    const mptKeyContracts: any[] = [];
+    for (let j = 0; j < userStorageSlotsCount; j++) {
+      for (let i = 0; i < participantsArray.length; i++) {
+        mptKeyContracts.push({
+          address: bridgeCoreAddress,
+          abi: bridgeCoreAbi,
+          functionName: "getL2MptKey" as const,
+          args: [currentChannelId as `0x${string}`, participantsArray[i], j],
+        });
       }
     }
-
-    // Get MPT keys for each participant using dynamic balance slot index
-    setStatus("Fetching participant MPT keys...");
-    const mptKeyContracts = participantsArray.map(
-      (participant: `0x${string}`) => ({
-        address: bridgeCoreAddress,
-        abi: bridgeCoreAbi,
-        functionName: "getL2MptKey" as const,
-        args: [currentChannelId as `0x${string}`, participant, balanceSlotIndex],
-      })
-    );
 
     const mptKeyResults = await readContracts(config, {
       contracts: mptKeyContracts,
     });
 
     console.log(
-      "[State3Page] 👥 Processing participants for permutation and balances:"
+      "[State3Page] 👥 Processing participants for permutation (slot-first order):"
     );
 
-    for (let i = 0; i < participantsArray.length; i++) {
-      const participant = participantsArray[i];
-      const mptKeyResult = mptKeyResults[i];
+    let mptKeyIdx = 0;
+    for (let j = 0; j < userStorageSlotsCount; j++) {
+      for (let i = 0; i < participantsArray.length; i++) {
+        const participant = participantsArray[i];
+        const mptKeyResult = mptKeyResults[mptKeyIdx];
+        mptKeyIdx++;
 
-      if (!mptKeyResult || mptKeyResult.status !== "success") {
-        console.warn(
-          `[State3Page] ⚠️ Failed to fetch MPT key for participant ${i} (${participant})`
-        );
-        perm.push(BigInt(0));
-        balances.push(BigInt(0));
-        continue;
-      }
-
-      const mptKey = mptKeyResult.result as bigint;
-      const mptKeyHex = `0x${mptKey
-        .toString(16)
-        .padStart(64, "0")}`.toLowerCase();
-
-      // Find where this MPT key is in registeredKeys (proof order)
-      const proofIndex = registeredKeyIndexMap.get(mptKeyHex);
-
-      if (proofIndex !== undefined) {
-        perm.push(BigInt(proofIndex));
-
-        // Get balance from storageValueMap
-        const balanceValue = storageValueMap.get(mptKeyHex) || "0";
-        let balance: bigint;
-        if (balanceValue === "0x" || balanceValue === "") {
-          balance = BigInt(0);
-        } else if (balanceValue.startsWith("0x")) {
-          balance = BigInt(balanceValue);
-        } else {
-          balance = BigInt(balanceValue);
+        if (!mptKeyResult || mptKeyResult.status !== "success") {
+          console.warn(
+            `[State3Page] ⚠️ Failed to fetch MPT key for participant ${i} slot ${j} (${participant})`
+          );
+          perm.push(BigInt(0));
+          continue;
         }
-        balances.push(balance);
 
-        console.log(
-          `[State3Page] ✅ Participant ${i} (${participant}): MPT key ${mptKeyHex} -> proof index ${proofIndex}, balance = ${balance.toString()}`
-        );
-      } else {
-        console.warn(
-          `[State3Page] ⚠️ No registeredKey found for participant ${i} (${participant}) with MPT key ${mptKeyHex}, using index 0`
-        );
-        perm.push(BigInt(0));
-        balances.push(BigInt(0));
+        const mptKey = mptKeyResult.result as bigint;
+        const mptKeyHex = `0x${mptKey
+          .toString(16)
+          .padStart(64, "0")}`.toLowerCase();
+
+        // Find where this MPT key is in registeredKeys (proof order)
+        const proofIndex = registeredKeyIndexMap.get(mptKeyHex);
+
+        if (proofIndex !== undefined) {
+          perm.push(BigInt(proofIndex));
+
+          // Get slot value from storageValueMap
+          const slotValueHex = storageValueMap.get(mptKeyHex) || "0";
+          let slotValue: bigint;
+          if (slotValueHex === "0x" || slotValueHex === "") {
+            slotValue = BigInt(0);
+          } else if (slotValueHex.startsWith("0x")) {
+            slotValue = BigInt(slotValueHex);
+          } else {
+            slotValue = BigInt(slotValueHex);
+          }
+          slotValues[i][j] = slotValue;
+
+          console.log(
+            `[State3Page] ✅ Participant ${i} slot ${j} (${participant}): MPT key ${mptKeyHex} -> proof index ${proofIndex}, value = ${slotValue.toString()}`
+          );
+        } else {
+          console.warn(
+            `[State3Page] ⚠️ No registeredKey found for participant ${i} slot ${j} (${participant}) with MPT key ${mptKeyHex}, using index 0`
+          );
+          perm.push(BigInt(0));
+        }
       }
     }
 
@@ -688,14 +703,14 @@ function State3Page() {
     });
 
     console.log(
-      "[State3Page] 💰 Final balances (participant order):",
-      balances.map((b) => b.toString())
+      "[State3Page] 💰 Final slot values (participant x slot):",
+      slotValues.map((sv, i) => `P${i}: [${sv.map(v => v.toString()).join(", ")}]`)
     );
 
     setPermutation(perm);
-    setFinalBalances(balances);
+    setFinalBalances(slotValues.map(sv => sv[0])); // backward compat: balance is slot 0
 
-    return { permutation: perm, finalBalances: balances };
+    return { permutation: perm, finalSlotValues: slotValues };
   }, [
     currentChannelId,
     channelParticipants,
@@ -1040,7 +1055,7 @@ function State3Page() {
       console.log("[State3Page] 📊 Step 1: Building permutation...");
       const permResult = await buildPermutation();
       console.log("[State3Page] ✅ Permutation built:", {
-        finalBalances: permResult.finalBalances.map((b) => b.toString()),
+        finalSlotValues: permResult.finalSlotValues.map((sv) => sv.map((v) => v.toString())),
         permutation: permResult.permutation.map((p) => p.toString()),
       });
 
@@ -1058,7 +1073,7 @@ function State3Page() {
       setCloseChannelModalStep("signing");
       console.log("[State3Page] 🔗 Step 3: Verifying final balances...");
       console.log("[State3Page] 📋 Data to submit:", {
-        finalBalances: permResult.finalBalances,
+        finalSlotValues: permResult.finalSlotValues,
         permutation: permResult.permutation,
         proof: {
           pA: [...proofResult.proof.pA],
@@ -1073,7 +1088,7 @@ function State3Page() {
       // Note: verifyFinalBalances returns immediately after calling writeContract
       // The actual completion is tracked via isTransactionSuccess in useEffect
       verifyFinalBalances({
-        finalBalances: permResult.finalBalances,
+        finalSlotValues: permResult.finalSlotValues,
         permutation: permResult.permutation,
         proof: {
           pA: [...proofResult.proof.pA] as [bigint, bigint, bigint, bigint],
