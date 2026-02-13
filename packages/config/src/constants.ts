@@ -185,6 +185,27 @@ export const USDC_TOKEN_ADDRESS =
  * NOT the userStorageSlots array index. The EVM computes storage keys via
  * poseidon(l2Address, slotOffset), so this must match the contract layout.
  */
+/**
+ * Proxy Implementation Addresses
+ *
+ * For proxy contracts (e.g., USDC), contract_codes.json must include
+ * both the proxy and its implementation bytecode. Non-proxy tokens
+ * (TON, USDT) have empty arrays.
+ */
+export const PROXY_IMPLEMENTATION_ADDRESSES: Record<`0x${string}`, `0x${string}`[]> = {
+  [USDC_TOKEN_ADDRESS]: ["0xda317c1d3e835dd5f1be459006471acaa1289068" as `0x${string}`],
+};
+
+/**
+ * Get all addresses whose bytecode should be included in contract_codes.json
+ * for a given token. Always includes the token address itself, plus any
+ * proxy implementation addresses.
+ */
+export const getCallCodeAddresses = (tokenAddress: `0x${string}`): `0x${string}`[] => {
+  const impls = PROXY_IMPLEMENTATION_ADDRESSES[tokenAddress] || [];
+  return [tokenAddress, ...impls];
+};
+
 export const ERC20_TRANSFER: Record<
   `0x${string}`,
   { selector: `0x${string}`; slot: number }

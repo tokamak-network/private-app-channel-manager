@@ -27,6 +27,7 @@ import {
   DEFAULT_NETWORK,
   NETWORKS,
   getTokenByAddress,
+  getCallCodeAddresses,
 } from "@tokamak/config";
 
 export const runtime = "nodejs";
@@ -188,21 +189,20 @@ export async function POST(req: NextRequest) {
         console.log("[synthesize-stream] Fetching contract code for:", {
           effectiveTargetContract,
           targetContract,
-          snapshotContractAddress: previousStateSnapshot?.contractAddress,
+          snapshotContractAddress: previousStateSnapshot?.entryContractAddress,
         });
-        
-        const contractCode = await getContractCode(
-          targetChainId,
-          effectiveTargetContract,
-          initTxBlockNumber
+
+        const codeAddresses = getCallCodeAddresses(effectiveTargetContract);
+        const contractCodesArray = await Promise.all(
+          codeAddresses.map(async (addr) => ({
+            address: addr,
+            code: bytesToHex(await getContractCode(targetChainId, addr, initTxBlockNumber)),
+          }))
         );
-        const contractCodesArray = [
-          { address: effectiveTargetContract, code: bytesToHex(contractCode) },
-        ];
-        
+
         console.log("[synthesize-stream] Contract codes prepared:", {
-          address: effectiveTargetContract,
-          codeLength: contractCode?.length,
+          addresses: codeAddresses,
+          codeLengths: contractCodesArray.map(c => c.code?.length),
         });
         const contractCodePath = path.join(
           synthOutputPath,

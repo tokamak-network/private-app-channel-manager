@@ -93,7 +93,8 @@ export function extractParticipantBalances(
 }> {
   // Map storageEntries to participants by index
   // storageEntries are in participant order (index 0 = participant 0, etc.)
-  return snapshotData.storageEntries.map((entry, idx) => {
+  const entries = snapshotData.storageEntries?.[0] || [];
+  return entries.map((entry, idx) => {
     // Convert hex balance to decimal
     const balanceWei = entry.value === "0x" ? BigInt(0) : BigInt(entry.value);
     const balanceEth = Number(balanceWei) / Math.pow(10, decimals);
@@ -129,7 +130,7 @@ export function analyzeProof(
   return {
     merkleRoots,
     balances,
-    contractAddress: snapshotData.contractAddress,
+    contractAddress: snapshotData.entryContractAddress,
   };
 }
 

@@ -28,18 +28,11 @@ import { generateClientSideProof } from "@/lib/clientProofGeneration";
 import JSZip from "jszip";
 import { CloseChannelConfirmModal, type CloseChannelModalStep } from "../close-channel/_components/CloseChannelConfirmModal";
 import { useToken } from "../_context";
+import { normalizeStateSnapshot } from "@/lib/stateSnapshotCompat";
+import type { StateSnapshot } from "tokamak-l2js";
 
 // TODO: Add dynamic token icons based on tokenSymbol
 import TONSymbol from "@/assets/symbols/TON.svg";
-
-interface StateSnapshot {
-  channelId: number;
-  stateRoot: string;
-  registeredKeys: string[];
-  storageEntries: Array<{ key: string; value: string }>;
-  contractAddress: string;
-  preAllocatedLeaves: Array<{ key: string; value: string }>;
-}
 
 function State3Page() {
   const { tokenSymbol, tokenDecimals } = useToken();
@@ -227,7 +220,7 @@ function State3Page() {
           return;
         }
 
-        const stateSnapshot = JSON.parse(stateSnapshotJson) as StateSnapshot;
+        const stateSnapshot = normalizeStateSnapshot(JSON.parse(stateSnapshotJson));
 
         // Get balance slot index from target contract
         let balanceSlotIndex = 0;
@@ -269,7 +262,7 @@ function State3Page() {
 
         // Create a map from storage entries
         const storageValueMap = new Map<string, string>();
-        const storageEntries = stateSnapshot.storageEntries || [];
+        const storageEntries = stateSnapshot.storageEntries?.[0] || [];
         storageEntries.forEach((entry: { key: string; value: string }) => {
           const normalizedKey = entry.key.toLowerCase().startsWith("0x")
             ? entry.key.toLowerCase()
@@ -476,7 +469,7 @@ function State3Page() {
       throw new Error("state_snapshot.json not found in proof ZIP file");
     }
 
-    const stateSnapshot = JSON.parse(stateSnapshotJson) as StateSnapshot;
+    const stateSnapshot = normalizeStateSnapshot(JSON.parse(stateSnapshotJson));
     console.log(
       "[State3Page] 📦 State snapshot from verified proof (for permutation):",
       stateSnapshot
@@ -485,9 +478,9 @@ function State3Page() {
     setStatus("Calculating permutation...");
 
     // Use registeredKeys from state_snapshot.json - this is the order used in proof generation
-    const registeredKeys = stateSnapshot.registeredKeys || [];
-    const storageEntries = stateSnapshot.storageEntries || [];
-    const snapshotPreAllocatedLeaves = stateSnapshot.preAllocatedLeaves || [];
+    const registeredKeys = stateSnapshot.registeredKeys?.[0] || [];
+    const storageEntries = stateSnapshot.storageEntries?.[0] || [];
+    const snapshotPreAllocatedLeaves = stateSnapshot.preAllocatedLeaves?.[0] || [];
 
     console.log(
       "[State3Page] 📦 Storage entries from verified proof:",
@@ -845,7 +838,7 @@ function State3Page() {
       throw new Error("state_snapshot.json not found in proof ZIP file");
     }
 
-    const stateSnapshot = JSON.parse(stateSnapshotJson) as StateSnapshot;
+    const stateSnapshot = normalizeStateSnapshot(JSON.parse(stateSnapshotJson));
     console.log(
       "[State3Page] 📦 State snapshot from verified proof:",
       stateSnapshot
@@ -857,9 +850,9 @@ function State3Page() {
     }
 
     // Use registeredKeys and storageEntries from state_snapshot.json
-    const registeredKeys = stateSnapshot.registeredKeys || [];
-    const storageEntries = stateSnapshot.storageEntries || [];
-    const preAllocatedLeaves = stateSnapshot.preAllocatedLeaves || [];
+    const registeredKeys = stateSnapshot.registeredKeys?.[0] || [];
+    const storageEntries = stateSnapshot.storageEntries?.[0] || [];
+    const preAllocatedLeaves = stateSnapshot.preAllocatedLeaves?.[0] || [];
 
     console.log(
       "[State3Page] 🔐 Proof generation - storage entries (from verified proof):",

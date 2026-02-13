@@ -155,11 +155,10 @@ export async function GET(request: NextRequest) {
     console.log("[get-latest-state-snapshot] Successfully retrieved state snapshot:", {
       channelId: channelIdStr,
       proofId,
-      stateRoot: snapshot.stateRoot,
-      storageEntriesCount: snapshot.storageEntries?.length || 0,
-      storageEntries: snapshot.storageEntries,
-      registeredKeysCount: snapshot.registeredKeys?.length || 0,
-      hasPreAllocatedLeaves: !!(snapshot.preAllocatedLeaves?.length),
+      stateRoot: snapshot.stateRoots?.[0] ?? snapshot.stateRoot,
+      storageEntriesCount: snapshot.storageEntries?.[0]?.length ?? snapshot.storageEntries?.length ?? 0,
+      registeredKeysCount: snapshot.registeredKeys?.[0]?.length ?? snapshot.registeredKeys?.length ?? 0,
+      hasPreAllocatedLeaves: !!(snapshot.preAllocatedLeaves?.[0]?.length ?? snapshot.preAllocatedLeaves?.length),
     });
 
     return NextResponse.json({

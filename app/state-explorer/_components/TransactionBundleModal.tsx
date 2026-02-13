@@ -1020,20 +1020,20 @@ export function TransactionBundleModal({
                   <div>
                     <span className="text-[#4fc3f7]">State Root:</span>{" "}
                     <span className="font-mono text-xs">
-                      {stateSnapshot?.stateRoot?.slice(0, 20) || "N/A"}...
+                      {stateSnapshot?.stateRoots?.[0]?.slice(0, 20) || "N/A"}...
                     </span>
                   </div>
                   <div>
                     <span className="text-[#4fc3f7]">Registered Keys:</span>{" "}
-                    {stateSnapshot?.registeredKeys?.length || 0}
+                    {stateSnapshot?.registeredKeys?.[0]?.length || 0}
                   </div>
                   <div>
                     <span className="text-[#4fc3f7]">Storage Entries:</span>{" "}
-                    {stateSnapshot?.storageEntries?.length || 0}
+                    {stateSnapshot?.storageEntries?.[0]?.length || 0}
                   </div>
                   <div>
                     <span className="text-[#4fc3f7]">Pre-allocated Leaves:</span>{" "}
-                    {stateSnapshot?.preAllocatedLeaves?.length || 0}
+                    {stateSnapshot?.preAllocatedLeaves?.[0]?.length || 0}
                   </div>
                 </div>
               </div>

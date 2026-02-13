@@ -15,11 +15,8 @@ import { isValidBytes32 } from "@/lib/channelId";
 import { useBridgeCoreRead } from "@/hooks/contract";
 import { useBalanceSlotIndex } from "@/hooks/useBalanceSlotIndex";
 import { getTokenByAddress } from "@tokamak/config";
+import { normalizeStateSnapshot } from "@/lib/stateSnapshotCompat";
 import JSZip from "jszip";
-
-interface StateSnapshot {
-  storageEntries?: Array<{ key: string; value: string }>;
-}
 
 interface ChannelUserBalanceResult {
   /** Raw balance in wei (bigint) */
@@ -198,8 +195,8 @@ export function useChannelUserBalance({
         return;
       }
 
-      const stateSnapshot: StateSnapshot = JSON.parse(stateSnapshotJson);
-      const storageEntries = stateSnapshot.storageEntries || [];
+      const stateSnapshot = normalizeStateSnapshot(JSON.parse(stateSnapshotJson));
+      const storageEntries = stateSnapshot.storageEntries?.[0] || [];
 
       // Find balance by MPT key
       const myEntry = storageEntries.find(

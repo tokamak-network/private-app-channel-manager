@@ -17,6 +17,7 @@ import {
   DEFAULT_NETWORK,
   NETWORKS,
   getTokenByAddress,
+  getCallCodeAddresses,
 } from "@tokamak/config";
 import { getProofs, saveProof, deleteProof } from "@/lib/db/channels";
 
@@ -506,19 +507,13 @@ export async function POST(req: Request) {
     const blockInfoPath = path.join(synthOutputPath, "block_info.json");
     await fs.writeFile(blockInfoPath, blockInfoJson);
 
-    const contractCode = await getContractCode(
-      targetChainId,
-      effectiveTargetContract,
-      initTxBlockNumber
+    const codeAddresses = getCallCodeAddresses(effectiveTargetContract);
+    const contractCodesArray = await Promise.all(
+      codeAddresses.map(async (addr) => ({
+        address: addr,
+        code: bytesToHex(await getContractCode(targetChainId, addr, initTxBlockNumber)),
+      }))
     );
-
-    const contractCodeStr = bytesToHex(contractCode);
-    const contractCodesArray = [
-      {
-        address: effectiveTargetContract,
-        code: contractCodeStr,
-      },
-    ];
     const contractCodeJson = JSON.stringify(contractCodesArray, undefined, 2);
     const contractCodePath = path.join(synthOutputPath, "contract_codes.json");
     await fs.writeFile(contractCodePath, contractCodeJson);

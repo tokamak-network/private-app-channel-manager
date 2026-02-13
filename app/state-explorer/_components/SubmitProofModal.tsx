@@ -160,8 +160,11 @@ export function SubmitProofModal({
         ) {
           return 'Invalid state_snapshot.json: missing or invalid "storageEntries" array';
         }
-        if (typeof snapshotData.contractAddress !== "string") {
-          return 'Invalid state_snapshot.json: missing or invalid "contractAddress" field';
+        if (
+          typeof snapshotData.entryContractAddress !== "string" &&
+          typeof snapshotData.contractAddress !== "string"
+        ) {
+          return 'Invalid state_snapshot.json: missing or invalid "entryContractAddress" field';
         }
       } catch (parseError) {
         return `Invalid state_snapshot.json: ${

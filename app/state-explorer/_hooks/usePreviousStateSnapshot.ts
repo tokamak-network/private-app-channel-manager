@@ -16,6 +16,7 @@ import {
 } from "@/hooks/contract";
 import { StateSnapshot } from "tokamak-l2js";
 import { addHexPrefix } from "@ethereumjs/util";
+import { normalizeStateSnapshot } from "@/lib/stateSnapshotCompat";
 
 interface UsePreviousStateSnapshotParams {
   channelId: string | null;
@@ -79,12 +80,12 @@ export function usePreviousStateSnapshot({
           });
           
           if (data.snapshot) {
-            apiSnapshot = data.snapshot;
+            apiSnapshot = normalizeStateSnapshot(data.snapshot);
             console.log("[usePreviousStateSnapshot] API snapshot details:", {
-              stateRoot: apiSnapshot?.stateRoot,
-              storageEntriesCount: apiSnapshot?.storageEntries?.length,
-              storageEntries: apiSnapshot?.storageEntries,
-              hasPreAllocatedLeaves: !!(apiSnapshot?.preAllocatedLeaves?.length),
+              stateRoots: apiSnapshot?.stateRoots,
+              storageEntriesCount: apiSnapshot?.storageEntries?.[0]?.length,
+              storageEntries: apiSnapshot?.storageEntries?.[0],
+              hasPreAllocatedLeaves: !!(apiSnapshot?.preAllocatedLeaves?.[0]?.length),
             });
             
             // Check if preAllocatedLeaves is missing or empty
@@ -92,7 +93,8 @@ export function usePreviousStateSnapshot({
               const hasPreAllocatedLeaves =
                 apiSnapshot.preAllocatedLeaves &&
                 Array.isArray(apiSnapshot.preAllocatedLeaves) &&
-                apiSnapshot.preAllocatedLeaves.length > 0;
+                apiSnapshot.preAllocatedLeaves.length > 0 &&
+                apiSnapshot.preAllocatedLeaves[0]?.length > 0;
 
               if (hasPreAllocatedLeaves) {
                 // Snapshot has preAllocatedLeaves, use it
@@ -294,12 +296,12 @@ export function usePreviousStateSnapshot({
       if (apiSnapshot) {
         const mergedSnapshot: StateSnapshot = {
           ...apiSnapshot,
-          preAllocatedLeaves: preAllocatedLeaves.length > 0 ? preAllocatedLeaves : [],
+          preAllocatedLeaves: preAllocatedLeaves.length > 0 ? [preAllocatedLeaves] : [[]],
         };
         console.log(
           `[usePreviousStateSnapshot] Merged preAllocatedLeaves (${preAllocatedLeaves.length} entries) into API snapshot`
         );
-        console.log("[usePreviousStateSnapshot] Merged snapshot storageEntries:", mergedSnapshot.storageEntries);
+        console.log("[usePreviousStateSnapshot] Merged snapshot storageEntries:", mergedSnapshot.storageEntries?.[0]);
         setPreviousStateSnapshot(mergedSnapshot);
         setIsLoading(false);
         return mergedSnapshot;
@@ -432,11 +434,12 @@ export function usePreviousStateSnapshot({
       // Pass the actual channelId string - tokamak-cli accepts string channelIds in JSON
       const snapshot: StateSnapshot = {
         channelId: channelIdBytes32 as unknown as number,
-        stateRoot: initialRoot,
-        registeredKeys,
-        storageEntries,
-        contractAddress: targetContract,
-        preAllocatedLeaves,
+        stateRoots: [initialRoot],
+        storageAddresses: [targetContract],
+        registeredKeys: [registeredKeys],
+        storageEntries: [storageEntries],
+        entryContractAddress: targetContract,
+        preAllocatedLeaves: [preAllocatedLeaves],
       };
 
       setPreviousStateSnapshot(snapshot);
