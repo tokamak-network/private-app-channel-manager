@@ -22,6 +22,7 @@ import {
 import { getBlockInfo, getBlockNumber, getContractCode } from "@/lib/ethers";
 import { StateSnapshot } from "tokamak-l2js";
 import { bytesToHex } from "@ethereumjs/util";
+import { toOldStateSnapshot, normalizeStateSnapshot } from "@/lib/stateSnapshotCompat";
 import {
   FIXED_TARGET_CONTRACT,
   DEFAULT_NETWORK,
@@ -217,9 +218,11 @@ export async function POST(req: NextRequest) {
           synthOutputPath,
           "previous_state_snapshot.json"
         );
+        // tokamak-cli uses tokamak-l2js 0.0.13 (old format)
+        const snapshotForCli = toOldStateSnapshot(previousStateSnapshot);
         await fs.writeFile(
           previousStateSnapshotPath,
-          JSON.stringify(previousStateSnapshot, null, 2)
+          JSON.stringify(snapshotForCli, null, 2)
         );
 
         // Run synthesizer

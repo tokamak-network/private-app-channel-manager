@@ -36,3 +36,39 @@ export function normalizeStateSnapshot(raw: any): StateSnapshot {
     entryContractAddress: raw.contractAddress,
   };
 }
+
+/**
+ * Old format snapshot for tokamak-cli synthesizer (tokamak-l2js 0.0.13).
+ * The synthesizer binary reads stateRoot, contractAddress, etc.
+ */
+export interface OldStateSnapshot {
+  channelId: number;
+  stateRoot: string;
+  contractAddress: string;
+  registeredKeys: string[];
+  storageEntries: Array<{ key: string; value: string }>;
+  preAllocatedLeaves: Array<{ key: string; value: string }>;
+}
+
+/**
+ * Convert new format snapshot to old format for tokamak-cli synthesizer.
+ *
+ * The synthesizer binary (Tokamak-Zk-EVM/tokamak-cli) uses tokamak-l2js 0.0.13
+ * which expects the old format: stateRoot, contractAddress, flat arrays.
+ */
+export function toOldStateSnapshot(snapshot: StateSnapshot | any): OldStateSnapshot {
+  // Already old format
+  if (typeof snapshot.stateRoot === "string") {
+    return snapshot as OldStateSnapshot;
+  }
+
+  // Convert new format to old
+  return {
+    channelId: snapshot.channelId,
+    stateRoot: snapshot.stateRoots?.[0] ?? "",
+    contractAddress: snapshot.entryContractAddress ?? snapshot.storageAddresses?.[0] ?? "",
+    registeredKeys: snapshot.registeredKeys?.[0] ?? [],
+    storageEntries: snapshot.storageEntries?.[0] ?? [],
+    preAllocatedLeaves: snapshot.preAllocatedLeaves?.[0] ?? [],
+  };
+}

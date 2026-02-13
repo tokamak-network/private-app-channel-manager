@@ -193,7 +193,10 @@ export const USDC_TOKEN_ADDRESS =
  * (TON, USDT) have empty arrays.
  */
 export const PROXY_IMPLEMENTATION_ADDRESSES: Record<`0x${string}`, `0x${string}`[]> = {
-  [USDC_TOKEN_ADDRESS]: ["0xda317c1d3e835dd5f1be459006471acaa1289068" as `0x${string}`],
+  // NOTE: USDC implementation bytecode causes "Corrupted placement variables"
+  // in the prover. The synthesizer (tokamak-l2js 0.0.13) may not support
+  // multi-contract traces yet. Disabled until synthesizer is upgraded.
+  // [USDC_TOKEN_ADDRESS]: ["0xda317c1d3e835dd5f1be459006471acaa1289068" as `0x${string}`],
 };
 
 /**
