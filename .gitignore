@@ -15,6 +15,7 @@ test-results/
 playwright-report/
 playwright/.cache/
 channel-test-state.json
+shared-state.json
 .test-chrome-profile/
 **/e2e/.test-chrome-profile/
 
